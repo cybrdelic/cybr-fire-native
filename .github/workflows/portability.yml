@@ -30,6 +30,20 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Wait for hosted Linux Docker service
+        shell: bash
+        timeout-minutes: 3
+        run: |
+          sudo systemctl start docker
+          for attempt in 1 2 3; do
+            if timeout 30s docker info --format '{{.OSType}}' | grep -qx linux; then
+              exit 0
+            fi
+            echo "Docker is not ready (attempt ${attempt}/3)"
+            sleep 5
+          done
+          sudo journalctl -u docker --no-pager -n 60
+          exit 1
       - run: python tools/run_portable.py --build --image cybr-fire-portable
       - run: docker run --rm --entrypoint python cybr-fire-portable tests/test_portable_compute.py
       - run: docker run --rm --entrypoint python cybr-fire-portable tests/test_runtime.py
