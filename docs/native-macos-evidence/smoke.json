@@ -1,0 +1,452 @@
+{
+  "passed": true,
+  "host": {
+    "platform": "darwin",
+    "machine": "arm64"
+  },
+  "adapter": {
+    "vendor": "Mesa",
+    "renderer": "llvmpipe (LLVM 23.1.0, 128 bits)",
+    "version": "4.6 (Core Profile) Mesa 26.2.2",
+    "egl_library": "libEGL.dylib",
+    "egl_library_source": "explicit",
+    "backend": "egl",
+    "egl_platform": "surfaceless",
+    "egl_device_index": null,
+    "max_image_units": 256,
+    "native_field_bindings_supported": true,
+    "software_adapter": true
+  },
+  "scope": "four ticks, 16x24x16, native-image/SSBO parity, 64x96 render",
+  "production_quality": false,
+  "pressure_backend": "multigrid",
+  "physics_scene": {
+    "name": "burner",
+    "domain": {
+      "shape": [
+        16,
+        24,
+        16
+      ],
+      "spacing": 0.1,
+      "tick": 0.016666666666666666,
+      "pressure_cycles": 3,
+      "pressure_backend": "multigrid",
+      "texture_transport": true,
+      "native_fields": false,
+      "trace_courant": 2.0,
+      "max_trace_steps": 4
+    },
+    "chemistry": {
+      "oxygen_ambient": 0.27,
+      "heat_capacity": 1200.0,
+      "heat_release": 46000000.0,
+      "soot_yield": 0.035,
+      "reaction_rate": 70.0,
+      "cooling_rate": 0.5,
+      "radiation_coefficient": 3.4022246514e-05,
+      "soot_oxidation": 0.5
+    },
+    "flow": {
+      "buoyancy": 13.0,
+      "confinement": 1.8,
+      "max_turbulent_acceleration": 8.0,
+      "drag": 0.4,
+      "wind": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "entrainment_rate": 0.0,
+      "entrainment_height": 0.4
+    },
+    "render": {
+      "width": 64,
+      "height": 96,
+      "exposure": 1.4,
+      "fov": 39.0,
+      "yaw": 15.0,
+      "camera_distance": 4.8,
+      "camera_height": 1.8,
+      "target_height": 1.45,
+      "camera_target_x": null,
+      "camera_target_z": null,
+      "step_scale": 0.65,
+      "samples": 1,
+      "soot_extinction": 1900.0,
+      "scatter_albedo": 0.35,
+      "ambient": 0.65,
+      "background": [
+        0.008,
+        0.012,
+        0.021
+      ],
+      "bloom": 0.08,
+      "ground_resolution": 16,
+      "ground_directions": 16,
+      "floor": true,
+      "illumination_directions": 14,
+      "scattering_iterations": 2,
+      "empty_space_skipping": true,
+      "traversal_policy": "auto",
+      "brick_size": 8,
+      "stable_sampling": true,
+      "transmittance_cutoff": 0.002,
+      "key_direction": [
+        -0.55,
+        0.7,
+        -0.45
+      ],
+      "key_color": [
+        0.8,
+        0.9,
+        1.0
+      ],
+      "key_intensity": 0.0,
+      "phase_g": 0.25,
+      "shadow_step_cells": 1.5,
+      "shadow_resolution_scale": 2,
+      "ember_tile_capacity": 128,
+      "reconstruction_mode": 0
+    },
+    "emitters": [
+      {
+        "center": [
+          0.96,
+          0.12,
+          0.96
+        ],
+        "radii": [
+          0.3,
+          0.16,
+          0.3
+        ],
+        "velocity": [
+          0.0,
+          0.65,
+          0.0
+        ],
+        "fuel": 0.045,
+        "oxygen_deficit": 0.2,
+        "temperature": 1100.0,
+        "soot": 0.0,
+        "replacement_rate": 70.0,
+        "start": 0.0,
+        "end": 1000000.0,
+        "modulation": 0.25,
+        "frequency": 8.0,
+        "seed": 1847,
+        "swirl": 0.0,
+        "turbulent_speed": 0.8,
+        "turbulent_length": 0.32,
+        "turbulent_time": 0.24,
+        "attack": 0.0,
+        "release": 0.0,
+        "motion_velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "expansion_speed": 0.0,
+        "radial_speed": 0.0
+      }
+    ],
+    "solids": [],
+    "embers": {
+      "enabled": false,
+      "capacity": 4096,
+      "rate_per_emitter": 110.0,
+      "radius_min": 0.0009,
+      "radius_max": 0.0024,
+      "temperature": 1900.0,
+      "density": 120.0,
+      "heat_capacity": 1100.0,
+      "drag_coefficient": 0.65,
+      "heat_transfer": 45.0,
+      "emissivity": 0.86,
+      "burn_rate": 0.00022,
+      "oxidation_heat": 32800000.0,
+      "retained_heat_fraction": 0.35,
+      "launch_velocity": [
+        0.0,
+        1.8,
+        0.0
+      ],
+      "lifetime": 5.0,
+      "restitution": 0.22,
+      "friction": 0.3,
+      "seed": 619
+    },
+    "surface_fuel": {
+      "enabled": false,
+      "center": [
+        0.96,
+        0.96
+      ],
+      "radii": [
+        0.75,
+        0.75
+      ],
+      "inventory": 0.55,
+      "initial_ignition_radius": 0.22,
+      "initial_temperature": 300.0,
+      "burn_rate": 0.045,
+      "ignition_temperature": 650.0,
+      "surface_heat_capacity": 1700.0,
+      "diffusivity": 0.008,
+      "heat_transfer": 25.0,
+      "cooling_rate": 0.18,
+      "spread_radiation": 14.0,
+      "pyrolysis_heat": 3000000.0
+    }
+  },
+  "native_storage_scene": {
+    "name": "burner",
+    "domain": {
+      "shape": [
+        16,
+        24,
+        16
+      ],
+      "spacing": 0.1,
+      "tick": 0.016666666666666666,
+      "pressure_cycles": 3,
+      "pressure_backend": "multigrid",
+      "texture_transport": true,
+      "native_fields": true,
+      "trace_courant": 2.0,
+      "max_trace_steps": 4
+    },
+    "chemistry": {
+      "oxygen_ambient": 0.27,
+      "heat_capacity": 1200.0,
+      "heat_release": 46000000.0,
+      "soot_yield": 0.035,
+      "reaction_rate": 70.0,
+      "cooling_rate": 0.5,
+      "radiation_coefficient": 3.4022246514e-05,
+      "soot_oxidation": 0.5
+    },
+    "flow": {
+      "buoyancy": 13.0,
+      "confinement": 1.8,
+      "max_turbulent_acceleration": 8.0,
+      "drag": 0.4,
+      "wind": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "entrainment_rate": 0.0,
+      "entrainment_height": 0.4
+    },
+    "render": {
+      "width": 64,
+      "height": 96,
+      "exposure": 1.4,
+      "fov": 39.0,
+      "yaw": 15.0,
+      "camera_distance": 4.8,
+      "camera_height": 1.8,
+      "target_height": 1.45,
+      "camera_target_x": null,
+      "camera_target_z": null,
+      "step_scale": 0.65,
+      "samples": 1,
+      "soot_extinction": 1900.0,
+      "scatter_albedo": 0.35,
+      "ambient": 0.65,
+      "background": [
+        0.008,
+        0.012,
+        0.021
+      ],
+      "bloom": 0.08,
+      "ground_resolution": 16,
+      "ground_directions": 16,
+      "floor": true,
+      "illumination_directions": 14,
+      "scattering_iterations": 2,
+      "empty_space_skipping": true,
+      "traversal_policy": "auto",
+      "brick_size": 8,
+      "stable_sampling": true,
+      "transmittance_cutoff": 0.002,
+      "key_direction": [
+        -0.55,
+        0.7,
+        -0.45
+      ],
+      "key_color": [
+        0.8,
+        0.9,
+        1.0
+      ],
+      "key_intensity": 0.0,
+      "phase_g": 0.25,
+      "shadow_step_cells": 1.5,
+      "shadow_resolution_scale": 2,
+      "ember_tile_capacity": 128,
+      "reconstruction_mode": 0
+    },
+    "emitters": [
+      {
+        "center": [
+          0.96,
+          0.12,
+          0.96
+        ],
+        "radii": [
+          0.3,
+          0.16,
+          0.3
+        ],
+        "velocity": [
+          0.0,
+          0.65,
+          0.0
+        ],
+        "fuel": 0.045,
+        "oxygen_deficit": 0.2,
+        "temperature": 1100.0,
+        "soot": 0.0,
+        "replacement_rate": 70.0,
+        "start": 0.0,
+        "end": 1000000.0,
+        "modulation": 0.25,
+        "frequency": 8.0,
+        "seed": 1847,
+        "swirl": 0.0,
+        "turbulent_speed": 0.8,
+        "turbulent_length": 0.32,
+        "turbulent_time": 0.24,
+        "attack": 0.0,
+        "release": 0.0,
+        "motion_velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "expansion_speed": 0.0,
+        "radial_speed": 0.0
+      }
+    ],
+    "solids": [],
+    "embers": {
+      "enabled": false,
+      "capacity": 4096,
+      "rate_per_emitter": 110.0,
+      "radius_min": 0.0009,
+      "radius_max": 0.0024,
+      "temperature": 1900.0,
+      "density": 120.0,
+      "heat_capacity": 1100.0,
+      "drag_coefficient": 0.65,
+      "heat_transfer": 45.0,
+      "emissivity": 0.86,
+      "burn_rate": 0.00022,
+      "oxidation_heat": 32800000.0,
+      "retained_heat_fraction": 0.35,
+      "launch_velocity": [
+        0.0,
+        1.8,
+        0.0
+      ],
+      "lifetime": 5.0,
+      "restitution": 0.22,
+      "friction": 0.3,
+      "seed": 619
+    },
+    "surface_fuel": {
+      "enabled": false,
+      "center": [
+        0.96,
+        0.96
+      ],
+      "radii": [
+        0.75,
+        0.75
+      ],
+      "inventory": 0.55,
+      "initial_ignition_radius": 0.22,
+      "initial_temperature": 300.0,
+      "burn_rate": 0.045,
+      "ignition_temperature": 650.0,
+      "surface_heat_capacity": 1700.0,
+      "diffusivity": 0.008,
+      "heat_transfer": 25.0,
+      "cooling_rate": 0.18,
+      "spread_radiation": 14.0,
+      "pyrolysis_heat": 3000000.0
+    }
+  },
+  "maximum_absolute_errors": {
+    "q": 0.0,
+    "velocity": 0.0,
+    "pressure": 0.0,
+    "hdr": 0.0
+  },
+  "slab_readback": true,
+  "checkpoint_roundtrip": true,
+  "diagnostics": {
+    "time": 0.06666666666666667,
+    "tick": 4,
+    "finite": true,
+    "min_species": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "max_species": [
+      0.02878611907362938,
+      0.2572697699069977,
+      1983637.125,
+      0.000999320182017982
+    ],
+    "integrals": [
+      0.0007176659200460213,
+      0.007740641484652902,
+      53291.96985320963,
+      2.0820155311179764e-05
+    ],
+    "max_temperature_K": 1953.0309375,
+    "max_component_speed": 1.142432689666748,
+    "divergence_rms": 3.064232802018941e-05,
+    "divergence_max": 0.00048424582928419113,
+    "cfl_component": 0.19040544827779132,
+    "floor_normal_max": 0.0,
+    "diagnostic_readback": "bounded z slabs"
+  },
+  "wall_seconds": 5.015863999999993,
+  "shader_sha256": {
+    "air_mixing.comp": "292315622cd6291b58284f87dfef632ee787d8f10221608f758c8f9f4a13b466",
+    "bricks.comp": "2a7ee639a9904219d37ba8ad5d1aebfcb372ef66b7ee0a1eccfc63b2c383a3ea",
+    "chemistry.comp": "61a0ca08574dfb93248a0b0ee7cc64c8a90bbb640ea145f3b3c2a97dff65fc02",
+    "common.glsl": "7fdc57a238ca7273ee4c8a2d10d6bb057a9eed964dec988b5f4feda8d68aefb2",
+    "copy_texture.comp": "d2503f152c15b5f419d34c9a4257f87d1dcd53566f458d06fee9d8ea40f30e78",
+    "detail_advect.comp": "3fd8e93c910fa07af8f6eedc07b870946a780320993560b1a01e0390f5e1f175",
+    "detail_flow.comp": "f9ecb64077e1f161713f9f9979ea40ae1b71f09ed6a63d9d5adb9542ea07d0ed",
+    "detail_initialize.comp": "29d9e989978cbb6612904054056ee09ca04f714a4fa5faae45f5b4acbb7de0ec",
+    "direct_light.comp": "98cda18200b9b8ed2bb6e8ccc06e21431b13d2e816a9d2d2821bc7aa993202f2",
+    "embers.comp": "dfc4d72bbdd0f1dc22531734eb06f2a3e92a85bec38bf58f78c322c71a4486eb",
+    "forces.comp": "7765b2fc800fde669193daf6f7f17cb79e1364feeb782ce7b79f097b6c580ce4",
+    "ground.comp": "3fa309ecc3ca48f5181da6a0cbf745bb482e8dc0d77aecedf8ab214d11ce539f",
+    "lighting.comp": "bb0e3392c8b6a5d00bca1144c5e4f95cbbaf87e910aa944287058298ed4a9208",
+    "optical.comp": "96090a6866b3301b297cdea2adb886f983fb154fc87242a6479fa2513873b555",
+    "particle_bins.comp": "6331693f25d67f2b554fbc4fa987af301b1484cb93d50ed3e66ec5cc87738e31",
+    "particle_events.glsl": "5f97e4f3c1a0facd7c5d2899d011937bbb5581e2eb67e9756b571fb06debccf1",
+    "pressure.comp": "d1947e0fb96cf10ee32c9a120afcf44bb5b982a8d283b6f26a2463e438c426c1",
+    "project.comp": "15b6fbb0585fded3c114ecbb093d1e19dd9a101a12def1dca03b3692ff8b37f2",
+    "reconstruction.glsl": "7681de20b63f652bd94b5db9a767d5a3fc74bb0cad285e818de89efe286538b4",
+    "render.comp": "67475236e787b1bd49bbb85af3019473e8a5538b7356e01c581a65680e5fbcef",
+    "solid_boundary.comp": "7ee808e0b0edc425fa224fb1026040e18ade361e9465ee8aa9cbe3ee4b27834c",
+    "solids.glsl": "754a35260cca058189d9281d45563c53837d8f492abdf8fb02fb2965d930635e",
+    "source.comp": "a3b1d774975e11c61e01d95dc606f9da460d1b70387844f21de0e61016c639b8",
+    "surface.glsl": "ffdc646da8032ce21eafdf4478abbd5bf67741879dfaea632f9a61f128ea6e0f",
+    "surface_fuel.comp": "d6b458dfe9e693f7671ac7b58216dc020423d721e070edaa90c811e5a3a5bbfe",
+    "surface_inject.comp": "026d03997d192097f6ffbe4769daf62bf6810a5e77ac9295a5f850cb3e6dfd23",
+    "transport.comp": "41a8be4ba1ee0763c923b8dd755072e0b7a586d4b431c46d141f75f33b0eb982",
+    "volume_sampling.glsl": "2ae8a1259cc6da52bd6b1d638614104811612dd3a80ace96a18f469b32f2967b"
+  }
+}

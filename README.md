@@ -30,7 +30,7 @@ Fine scalar transport uses parent velocity plus explicitly modeled transverse mo
 ## Requirements
 
 - Python 3.11+ for the combined tooling; NumPy, SciPy, Pillow and GLFW via `requirements.txt`.
-- Native Windows/GLFW or Linux/EGL with **OpenGL 4.5** and a compatible driver. Native macOS Mesa/EGL discovery and a real solver/render verifier are implemented but await execution on a Mac; Apple's OpenGL 4.1 is insufficient. A Linux Mesa container remains a separate software-compute option through existing Docker. See [setup and verification limits](PORTABILITY.md) and the [native macOS Mesa path](docs/NATIVE_MACOS_MESA.md).
+- Native Windows/GLFW or Linux/EGL with **OpenGL 4.5** and a compatible driver. Native macOS ARM64 Mesa/EGL has passed bounded real simulation, checkpoint and render checks through llvmpipe CPU software; Apple's OpenGL 4.1 is insufficient. A Linux Mesa container remains a separate software-compute option through existing Docker. See [setup and verification limits](PORTABILITY.md) and the [native macOS Mesa path](docs/NATIVE_MACOS_MESA.md).
 - FFmpeg/ffprobe for encoding and checking movies; Bash for shell wrappers.
 - Ample RAM, VRAM and disk. A single full fine-state NPY is about **1.59 GB**, before other fields and snapshots. The earlier software-GL environment was extremely slow. Allow at least 6 GiB free host RAM for the original fine pipeline and measure actual GPU/host allocation requirements. Do not run parent and fine stages concurrently on a memory-limited machine.
 
