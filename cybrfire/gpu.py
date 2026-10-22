@@ -1,6 +1,6 @@
-"""Minimal EGL/OpenGL compute runtime. No Python graphics package required.
+"""OpenGL compute runtime with EGL and hidden GLFW context backends.
 
-This runtime explicitly requires a compute-capable OpenGL 4.3+ implementation.
+This runtime explicitly requires a compute-capable OpenGL 4.5 implementation.
 Software adapters are identified, never relabeled as hardware acceleration.
 """
 import ctypes as C
@@ -11,57 +11,36 @@ import numpy as np
 
 class ComputeContext:
     def __init__(self):
-        name = ctypes.util.find_library('EGL')
-        if not name:
-            raise RuntimeError('EGL not installed. Use Linux/WSL with Mesa or GPU vendor EGL.')
-        self.egl = C.CDLL(name)
-        e = self.egl
-        e.eglGetProcAddress.argtypes=[C.c_char_p];e.eglGetProcAddress.restype=C.c_void_p
-        platform_ptr=e.eglGetProcAddress(b'eglGetPlatformDisplayEXT')
-        if not platform_ptr:raise RuntimeError('EGL_EXT_platform_base is unavailable')
-        platform=C.CFUNCTYPE(C.c_void_p,C.c_uint,C.c_void_p,C.POINTER(C.c_int))(platform_ptr)
-        e.eglInitialize.argtypes=[C.c_void_p,C.POINTER(C.c_int),C.POINTER(C.c_int)];e.eglInitialize.restype=C.c_uint
-        # EGL_PLATFORM_DEVICE_EXT supports headless vendor GPUs; Mesa's
-        # surfaceless platform is a fallback, not an assumed NVIDIA capability.
-        candidates=[];requested=os.environ.get('CYBR_EGL_DEVICE')
-        query_ptr=e.eglGetProcAddress(b'eglQueryDevicesEXT')
-        if query_ptr:
-            query=C.CFUNCTYPE(C.c_uint,C.c_int,C.POINTER(C.c_void_p),C.POINTER(C.c_int))(query_ptr)
-            devices=(C.c_void_p*32)();count=C.c_int()
-            if query(32,devices,C.byref(count)):
-                indices=range(count.value) if requested is None else [int(requested)]
-                for index in indices:
-                    if not 0<=index<count.value:raise RuntimeError('CYBR_EGL_DEVICE is outside the enumerated device range')
-                    candidates.append((platform(0x313F,devices[index],None),'device',index))
-        if requested is not None and not candidates:raise RuntimeError('Requested EGL device is not available')
-        if requested is None:candidates.append((platform(0x31DD,None,None),'surfaceless',None))
-        major,minor=C.c_int(),C.c_int();self.display=None
-        for display,kind,index in candidates:
-            if display and e.eglInitialize(display,C.byref(major),C.byref(minor)):
-                self.display=display;self.egl_platform=kind;self.egl_device_index=index;break
-        if not self.display:raise RuntimeError('Cannot initialize a device or surfaceless EGL display')
-        e.eglBindAPI.argtypes=[C.c_uint];e.eglBindAPI.restype=C.c_uint
-        if not e.eglBindAPI(0x30A2):raise RuntimeError('Cannot bind OpenGL')
-        attrs=(C.c_int*7)(0x3033,1,0x3040,8,0x3024,8,0x3038)
-        config=C.c_void_p();count=C.c_int()
-        e.eglChooseConfig.argtypes=[C.c_void_p,C.POINTER(C.c_int),C.POINTER(C.c_void_p),C.c_int,C.POINTER(C.c_int)];e.eglChooseConfig.restype=C.c_uint
-        if not e.eglChooseConfig(self.display,attrs,C.byref(config),1,C.byref(count)) or not count.value:raise RuntimeError('No EGL OpenGL configuration')
-        ca=(C.c_int*7)(0x3098,4,0x30FB,3,0x30FD,1,0x3038)
-        e.eglCreateContext.argtypes=[C.c_void_p,C.c_void_p,C.c_void_p,C.POINTER(C.c_int)];e.eglCreateContext.restype=C.c_void_p
-        self.context=e.eglCreateContext(self.display,config,None,ca)
-        if not self.context:raise RuntimeError('OpenGL 4.3 compute context unavailable')
-        e.eglMakeCurrent.argtypes=[C.c_void_p]*4;e.eglMakeCurrent.restype=C.c_uint
-        if not e.eglMakeCurrent(self.display,None,None,self.context):raise RuntimeError('Cannot make EGL context current')
-        self._load()
-        self.info={k:self.glGetString(v).decode() for k,v in [('vendor',0x1F00),('renderer',0x1F01),('version',0x1F02)]}
-        self.info['egl_platform']=self.egl_platform;self.info['egl_device_index']=self.egl_device_index
-        self.dispatch_width=65535
-        self.info['software_adapter']=any(x in self.info['renderer'].lower() for x in ['llvmpipe','softpipe','swiftshader','software'])
-        self.buffers=[];self.programs=[];self.closed=False
+        from .gl_context import open_context
+        self.backend = open_context()
+        try:
+            self._load()
+            self.info = {k: self.glGetString(v).decode() for k, v in
+                         [("vendor", 0x1F00), ("renderer", 0x1F01), ("version", 0x1F02)]}
+            major, minor = C.c_int(), C.c_int()
+            self.glGetIntegerv(0x821B, C.byref(major))
+            self.glGetIntegerv(0x821C, C.byref(minor))
+            if (major.value, minor.value) < (4, 5):
+                raise RuntimeError("OpenGL 4.5 required for compute and slab readback; got " + self.info["version"])
+            self.info.update(self.backend.info)
+            image_units = C.c_int()
+            self.glGetIntegerv(0x8F38, C.byref(image_units))
+            self.info["max_image_units"] = image_units.value
+            self.info["native_field_bindings_supported"] = image_units.value >= 12
+        except Exception:
+            self.backend.close()
+            raise
+        self.dispatch_width = 65535
+        self.info["software_adapter"] = any(x in self.info["renderer"].lower()
+            for x in ["llvmpipe", "softpipe", "swiftshader", "software"])
+        self.buffers = []
+        self.programs = []
+        self.closed = False
     def _fn(self,name,restype,*args):
-        ptr=self.egl.eglGetProcAddress(name.encode())
+        ptr=self.backend.address(name)
         if not ptr:raise RuntimeError('Missing OpenGL function '+name)
-        fn=C.CFUNCTYPE(restype,*args)(ptr);setattr(self,name,fn)
+        prototype=C.WINFUNCTYPE if os.name=='nt' else C.CFUNCTYPE
+        fn=prototype(restype,*args)(ptr);setattr(self,name,fn)
     def _load(self):
         U=C.c_uint;I=C.c_int;P=C.c_void_p;F=C.c_float;S=C.c_char_p
         for name,ret,args in [
@@ -120,10 +99,7 @@ class ComputeContext:
                 v=C.c_uint(handle);self.glDeleteTextures(1,C.byref(v))
             self.textures=[]
         self.buffers=[];self.programs=[];self.closed=True
-        self.egl.eglMakeCurrent(self.display,None,None,None)
-        self.egl.eglDestroyContext.argtypes=[C.c_void_p,C.c_void_p]
-        self.egl.eglDestroyContext(self.display,self.context)
-        self.egl.eglTerminate.argtypes=[C.c_void_p];self.egl.eglTerminate(self.display)
+        self.backend.close()
 
 class Buffer:
     def __init__(self,ctx,handle,shape,dtype):self.ctx,self.handle,self.shape,self.dtype=ctx,handle,shape,dtype
@@ -180,7 +156,7 @@ class Program:
         c.glDispatchCompute(gx,gy,1);c.glMemoryBarrier(0xFFFFFFFF)
 
 # Texture functions are loaded lazily to keep the compute-only tests independent.
-def texture3d(ctx, dims, unit, full_precision=False, edge=False):
+def texture3d(ctx, dims, unit, full_precision=False, edge=False, image_binding=True):
     if not hasattr(ctx,'glGenTextures'):
         U=C.c_uint;I=C.c_int;P=C.c_void_p
         for name,ret,args in [
@@ -195,7 +171,7 @@ def texture3d(ctx, dims, unit, full_precision=False, edge=False):
     ctx.glBindTexture(0x806F,handle.value);ctx.glTexStorage3D(0x806F,1,fmt,*dims)
     for p in [0x2801,0x2800]:ctx.glTexParameteri(0x806F,p,0x2601)
     for p in [0x2802,0x2803,0x8072]:ctx.glTexParameteri(0x806F,p,0x812F if edge else 0x812D)
-    ctx.glBindImageTexture(unit,handle.value,0,1,0,0x88B9,fmt)
+    if image_binding:ctx.glBindImageTexture(unit,handle.value,0,1,0,0x88B9,fmt)
     ctx.textures.append(handle.value);ctx.texture_formats[handle.value]=fmt;return handle.value
 
 def bind_texture(ctx, handle, unit, image=False):

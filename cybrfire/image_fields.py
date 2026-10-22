@@ -13,17 +13,20 @@ import ctypes as C
 import numpy as np
 from .gpu import texture3d, bind_texture, delete_texture
 
+def require_native_field_bindings(ctx):
+    limit=C.c_int();ctx.glGetIntegerv(0x8F38,C.byref(limit))
+    if limit.value<12:
+        raise RuntimeError(f'Native numerical fields reserve image units 8..11 and require 12; adapter exposes {limit.value}. Use the Mesa container or a capable driver. Sampling and small SSBO solver paths remain available.')
+
 class ImageField:
     def __init__(self, ctx, dimensions, full_precision=True):
         self.ctx=ctx;self.grid_shape=tuple(int(n) for n in dimensions)
         if len(self.grid_shape)!=3 or min(self.grid_shape)<1:raise ValueError('Invalid 3D field dimensions')
         limit=C.c_int();ctx.glGetIntegerv(0x8073,C.byref(limit))
         if max(self.grid_shape)>limit.value:raise ValueError('Field exceeds GL_MAX_3D_TEXTURE_SIZE')
-        ctx.glGetIntegerv(0x8F38,C.byref(limit)) # GL_MAX_IMAGE_UNITS
-        if limit.value<12:raise RuntimeError('Native field path requires 12 image binding units')
         self.shape=(int(np.prod(self.grid_shape)),4);self.dtype=np.dtype(np.float32)
         self.full_precision=full_precision
-        self.handle=texture3d(ctx,self.grid_shape,8,full_precision=full_precision)
+        self.handle=texture3d(ctx,self.grid_shape,8,full_precision=full_precision,image_binding=False)
         if not hasattr(ctx,'glTexSubImage3D'):
             U=C.c_uint;I=C.c_int;P=C.c_void_p
             ctx._fn('glTexSubImage3D',None,U,I,I,I,I,I,I,I,U,U,P)
@@ -34,6 +37,7 @@ class ImageField:
     def nbytes(self):return int(np.prod(self.shape))*4
     def bind_field(self,logical_binding):
         if not self.handle:raise RuntimeError('Field is closed')
+        require_native_field_bindings(self.ctx)
         # Read/write permits stages to use their more restrictive GLSL access
         # qualifier; visibility is established by Program.run's memory barrier.
         self.ctx.glBindImageTexture(8+logical_binding,self.handle,0,1,0,0x88BA,self.ctx.texture_formats[self.handle])
@@ -77,6 +81,7 @@ class ImageField:
 class ImageTransport:
     """Same corrected characteristic integrator, no field-to-cache copies."""
     def __init__(self,ctx,shape,trace_courant=2.,max_trace_steps=4):
+        require_native_field_bindings(ctx)
         self.ctx=ctx;self.shape=tuple(shape);self.shapes=[self.shape,tuple(n+1 for n in shape)]
         self.trace_courant=trace_courant;self.max_trace_steps=max_trace_steps;self.solid_count=0
         shader=Path(__file__).resolve().parents[1]/'shaders/transport.comp'

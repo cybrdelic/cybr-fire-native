@@ -2,11 +2,12 @@
 """Crash-safe, content-verified checkpoint bundles for resumable CYBR FIRE runs.
 
 A generation is only visible in LATEST after its immutable snapshot has been
-fully written, fsynced, hashed, and atomically renamed.  Untrusted manifests
+fully written, file-fsynced, hashed, and atomically renamed. POSIX also flushes
+directories; Windows records its weaker power-loss durability in the manifest.  Untrusted manifests
 are never accepted without checking the referenced bytes.
 """
 import argparse, hashlib, json, os, shutil, sys, tempfile, time, uuid, zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 BLOCK=8*1024*1024
 
@@ -17,7 +18,11 @@ def digest(p):
     return h.hexdigest()
 
 def sync_dir(p):
-    fd=os.open(str(p),os.O_RDONLY)
+    # Windows has no portable directory fsync. File contents are flushed and
+    # names replaced atomically; the manifest explicitly records this weaker
+    # power-loss guarantee instead of claiming POSIX directory durability.
+    if os.name == 'nt': return False
+    fd=os.open(str(p),os.O_RDONLY | getattr(os, 'O_DIRECTORY', 0))
     try: os.fsync(fd)
     finally: os.close(fd)
 
@@ -29,9 +34,12 @@ def atomic_text(p,s):
     os.replace(t,p);sync_dir(p.parent)
 
 def protected_rel(path):
-    p=Path(path)
-    if p.is_absolute() or not p.parts or '..' in p.parts:raise ValueError('unsafe relative path')
-    return p
+    # Interpret both old Windows manifests and new portable slash paths safely.
+    raw=str(path).replace(chr(92),'/')
+    p=PurePosixPath(raw)
+    if p.is_absolute() or PureWindowsPath(raw).drive or not p.parts or '..' in p.parts:
+        raise ValueError('unsafe relative path')
+    return Path(*p.parts)
 
 def snapshot(run, store, includes, generation=None):
     run=Path(run).resolve();store=Path(store).resolve();store.mkdir(parents=True,exist_ok=True)
@@ -51,12 +59,13 @@ def snapshot(run, store, includes, generation=None):
             target=staging/'payload'/rel;target.parent.mkdir(parents=True,exist_ok=True)
             # Independent copy, never hardlink; the live simulation may replace files.
             shutil.copyfile(src,target)
-            with open(target,'rb') as f:os.fsync(f.fileno())
+            with open(target,'r+b') as f:os.fsync(f.fileno())
             source_hash=digest(src);copy_hash=digest(target)
             if source_hash!=copy_hash:raise RuntimeError('Source changed during snapshot: '+str(rel))
-            entries.append(dict(path=str(rel),bytes=target.stat().st_size,sha256=copy_hash))
+            entries.append(dict(path=rel.as_posix(),bytes=target.stat().st_size,sha256=copy_hash))
         manifest=dict(format='cybr-fire-checkpoint-v1',generation=generation,
-                      created_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),files=entries)
+                      created_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),files=entries,
+                      durability=('file-fsync-atomic-replace-no-directory-fsync' if os.name=='nt' else 'file-and-directory-fsync'))
         atomic_text(staging/'manifest.json',json.dumps(manifest,indent=2,sort_keys=True))
         sync_dir(staging/'payload');sync_dir(staging)
         staging.rename(dst);sync_dir(dst.parent)

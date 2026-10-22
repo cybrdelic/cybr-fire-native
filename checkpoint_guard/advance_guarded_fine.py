@@ -5,9 +5,11 @@ This stage does not render or claim a frame. Warmup progress is explicit.
 Uses the unmodified 99,090,432-cell V8 numerical profile and two 1/48s steps.
 """
 from __future__ import annotations
-import argparse, fcntl, hashlib, json, os, sys, time, zipfile, gc
+import argparse, hashlib, json, os, sys, time, zipfile, gc
 from dataclasses import asdict,replace
 from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+from cybrfire.file_lock import lock_exclusive
 import numpy as np
 from checkpoint_guard import verify,digest,atomic_text
 from v8_guarded import audit,require_remote,commit
@@ -23,7 +25,7 @@ def write_field(field,path:Path):
             del slab
             # Avoid resident mmap pages competing with the two full GPU fields.
             if z%32==28:
-                f.flush();os.fdatasync(f.fileno())
+                f.flush();getattr(os,'fdatasync',os.fsync)(f.fileno())
                 if hasattr(os,'posix_fadvise'):os.posix_fadvise(f.fileno(),0,0,os.POSIX_FADV_DONTNEED)
         f.flush();os.fsync(f.fileno())
     os.replace(tmp,path)
@@ -31,7 +33,7 @@ def write_field(field,path:Path):
 def main():
     p=argparse.ArgumentParser()
     for n in ('run','store','exports','engine'):p.add_argument('--'+n,type=Path,required=True)
-    a=p.parse_args();lock=open(a.store/'BATCH.lock','a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+    a=p.parse_args();lock=open(a.store/'BATCH.lock','a');lock_exclusive(lock)
     receipt=require_remote(a.store);g=verify(a.store)
     for f in g['files']:
         if digest(a.run/f['path'])!=f['sha256']:raise RuntimeError('Live state changed: '+f['path'])

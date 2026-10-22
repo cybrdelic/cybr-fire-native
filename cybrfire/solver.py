@@ -60,7 +60,8 @@ class Simulation:
         self.native_fields=scene.domain.native_fields
         self.kernel_defines={"NATIVE_FIELDS":1} if self.native_fields else None
         if self.native_fields:
-            from .image_fields import ImageField
+            from .image_fields import ImageField, require_native_field_bindings
+            require_native_field_bindings(ctx)
             make_q=lambda:ImageField(ctx,self.shape)
             make_v=lambda:ImageField(ctx,tuple(n+1 for n in self.shape))
         else:
