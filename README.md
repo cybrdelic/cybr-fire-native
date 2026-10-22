@@ -29,8 +29,8 @@ Fine scalar transport uses parent velocity plus explicitly modeled transverse mo
 
 ## Requirements
 
-- Python 3.11+ for the combined tooling; NumPy, SciPy and Pillow via `requirements.txt`.
-- Linux/EGL with **OpenGL 4.5** and the relevant system GL/EGL libraries. The custom ctypes runtime is in `cybrfire/gpu.py`; a bare GL 4.3 context is insufficient for slab readback.
+- Python 3.11+ for the combined tooling; NumPy, SciPy, Pillow and GLFW via `requirements.txt`.
+- Native Windows/GLFW or Linux/EGL with **OpenGL 4.5** and a compatible driver. A Linux Mesa container provides software compute through existing Docker, including on macOS; native macOS OpenGL 4.1 is insufficient. See [setup, backend selection and verification limits](PORTABILITY.md).
 - FFmpeg/ffprobe for encoding and checking movies; Bash for shell wrappers.
 - Ample RAM, VRAM and disk. A single full fine-state NPY is about **1.59 GB**, before other fields and snapshots. The earlier software-GL environment was extremely slow. Allow at least 6 GiB free host RAM for the original fine pipeline and measure actual GPU/host allocation requirements. Do not run parent and fine stages concurrently on a memory-limited machine.
 
@@ -41,13 +41,16 @@ Fine scalar transport uses parent velocity plus explicitly modeled transverse mo
 From the repository root, in an isolated Python environment:
 
 ```bash
-python -m pip install -r requirements.txt
-OPENBLAS_NUM_THREADS=1 LP_NUM_THREADS=4 python tests/test_detail.py
-python -m cybrfire test
+python -m pip install --no-compile -r requirements.txt
+python -m cybrfire.doctor --require-compute
 python checkpoint_guard/test_checkpoint_guard.py
+python tests/test_portable.py
+python tests/test_portable_compute.py
+python tests/test_runtime.py
+python tests/test_detail.py
 ```
 
-Some checks create a real GL context and/or need generated integration fixtures. Inspect the test requirements before running a large job. Repository preparation checked syntax, file completeness, media decoding and public-data hygiene only; it did **not execute this engine** or rerun historical numerical tests.
+These are bounded checks; runtime and detail checks execute real small-grid simulation/transport. The broader `python -m cybrfire test` suite includes integration checks that may require generated fixtures. The [portability notes](PORTABILITY.md) separate locally executed Windows checks from configured CI and unverified host paths. Historical reports below retain their original provenance.
 
 ## Build independent scenes from initial conditions
 
@@ -78,4 +81,4 @@ The five-second, 120-new-frame native jet/pool/fireball production goals remain 
 
 ## Rights
 
-The supplied project sources contain no project-wide license grant. Publishing them does not add one. NumPy, SciPy, Pillow, FFmpeg and system GL/EGL retain their respective upstream terms; they are dependencies, not vendored here. The included media is project-rendered output. No unverified stock imagery, private receipts, chat transcripts or credentials are included.
+The supplied project sources contain no project-wide license grant. Publishing them does not add one. NumPy, SciPy, Pillow, GLFW, FFmpeg and system GL/EGL retain their respective upstream terms; they are dependencies, not vendored here. The included media is project-rendered output. No unverified stock imagery, private receipts, chat transcripts or credentials are included.

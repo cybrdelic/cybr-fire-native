@@ -6,9 +6,11 @@ separates pressure/velocity computation from native fine transport and rendering
 Snapshots and per-frame checkpoints are persistent and independently verifiable.
 """
 from pathlib import Path
-import argparse, fcntl, json, os, subprocess, sys, hashlib, time
+import argparse, json, os, subprocess, sys, hashlib, time
 
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
+from cybrfire.file_lock import lock_exclusive
 SCENES={
  'jet':{'warmup':24,'width':3840,'height':2160,'exposure':.009,'distance':1.25,'fov':42.,'target':.65},
  'pool':{'warmup':24,'width':3840,'height':2160,'exposure':.03,'distance':3.25,'fov':40.,'target':.96},
@@ -68,8 +70,8 @@ def main():
  if warmup<0:raise ValueError('Invalid warmup')
  out=args.out.resolve();out.mkdir(parents=True,exist_ok=True)
  (out/'parent').mkdir(exist_ok=True);(out/'capture').mkdir(exist_ok=True)
- with (out/'.work.lock').open('w') as f:
-  fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)
+ with (out/'.work.lock').open('a+') as f:
+  lock_exclusive(f)
   parent=read(out/'parent'/'manifest.json')
   rec=read(out/'capture'/'capture.json')
   print('BEFORE',args.scene,'parent',len(parent['frames']) if parent else 0,

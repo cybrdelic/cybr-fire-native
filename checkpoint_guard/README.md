@@ -33,3 +33,7 @@ The driver requires the last verified generation, exact matching live bytes and 
 `advance_guarded_fine.py` advances a full native fine warmup interval. Rendering remains a separate native-band stage. The latest archived experiment reached one of four warmup intervals and zero video frames. The stricter audit rejects old parent restarts that omit pressure; do not synthesize pressure for a nonzero state or substitute the older independent-batch restart format.
 
 The tools improve persistence and dependency validation, not throughput, fire realism, or hardware qualification. Historical report claims have not been rerun during source publication. Run `python checkpoint_guard/test_checkpoint_guard.py` separately for the supplied small guard tests, which are not a native-size recovery proof.
+
+## Platform durability
+
+Writable file handles are flushed on Windows and POSIX. POSIX additionally synchronizes directories; Windows records the weaker `file-fsync-atomic-replace-no-directory-fsync` policy in each new manifest. The Windows path preserves hash verification and atomic replacement, but does not promise POSIX directory persistence during power loss. Remote roundtrip verification remains required. See [runtime portability](../PORTABILITY.md).

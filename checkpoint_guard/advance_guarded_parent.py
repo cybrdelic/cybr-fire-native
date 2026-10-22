@@ -6,8 +6,10 @@ Resume exactly one or more 1/120-second ticks. Publish a velocity sample on
 No simulation setting or grid is reduced to fit an execution timeout.
 """
 from __future__ import annotations
-import argparse, fcntl, json, os, sys, time, zipfile
+import argparse, json, os, sys, time, zipfile
 from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+from cybrfire.file_lock import lock_exclusive
 import numpy as np
 from checkpoint_guard import digest, atomic_text, verify
 from v8_guarded import audit, commit, require_remote
@@ -21,7 +23,7 @@ def main():
     p.add_argument('--ticks',type=int,default=1)
     a=p.parse_args()
     if not 1<=a.ticks<=5:raise ValueError('Use 1..5 ticks per guarded micro-batch')
-    lock=open(a.store/'BATCH.lock','a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+    lock=open(a.store/'BATCH.lock','a');lock_exclusive(lock)
     receipt=require_remote(a.store);verified=verify(a.store)
     for f in verified['files']:
         if digest(a.run/f['path'])!=f['sha256']:
