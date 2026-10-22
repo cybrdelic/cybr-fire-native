@@ -1,13 +1,14 @@
 """Context creation only: EGL headless or a hidden GLFW desktop context.
 
 Numerical kernels and renderer are shared by both backends. This is not a CPU
-solver fallback. Native macOS OpenGL 4.1 does not provide the required compute.
+solver fallback. Apple's OpenGL 4.1 does not provide the required compute;
+native Mesa EGL can supply the same API through its software implementation.
 """
 import ctypes as C
-import ctypes.util
 import os
 import sys
 import threading
+from .egl_library import load_egl_library
 
 _glfw_users = 0
 
@@ -19,14 +20,17 @@ class EGLContext:
         except Exception:
             self.close()
             raise
-        self.info = {"backend": "egl", "egl_platform": self.egl_platform,
+        self.info = {**self.library_info, "backend": "egl", "egl_platform": self.egl_platform,
                      "egl_device_index": self.egl_device_index}
 
     def _open(self):
-        name = ctypes.util.find_library('EGL')
-        if not name:
-            raise RuntimeError('EGL not installed. Install a vendor/Mesa EGL implementation or use CYBR_GL_BACKEND=glfw.')
-        self.egl = C.CDLL(name)
+        requested=os.environ.get('CYBR_EGL_DEVICE')
+        selected=os.environ.get('CYBR_EGL_PLATFORM','auto').lower()
+        if selected not in ('auto','device','surfaceless'):
+            raise ValueError('CYBR_EGL_PLATFORM must be auto, device, or surfaceless')
+        if requested is not None and selected=='surfaceless':
+            raise ValueError('CYBR_EGL_DEVICE cannot be combined with CYBR_EGL_PLATFORM=surfaceless')
+        self.egl, self.library_info = load_egl_library()
         e = self.egl
         e.eglGetProcAddress.argtypes=[C.c_char_p];e.eglGetProcAddress.restype=C.c_void_p
         platform_ptr=e.eglGetProcAddress(b'eglGetPlatformDisplayEXT')
@@ -34,10 +38,13 @@ class EGLContext:
         platform=C.CFUNCTYPE(C.c_void_p,C.c_uint,C.c_void_p,C.POINTER(C.c_int))(platform_ptr)
         e.eglInitialize.argtypes=[C.c_void_p,C.POINTER(C.c_int),C.POINTER(C.c_int)];e.eglInitialize.restype=C.c_uint
         # EGL_PLATFORM_DEVICE_EXT supports headless vendor GPUs; Mesa's
-        # surfaceless platform is a fallback, not an assumed NVIDIA capability.
-        candidates=[];requested=os.environ.get('CYBR_EGL_DEVICE')
+        # surfaceless platform is preferred on macOS and explicitly selectable.
+        candidates=[]
+        surfaceless_first = selected=='surfaceless' or (selected=='auto' and sys.platform=='darwin' and requested is None)
+        if surfaceless_first:
+            candidates.append((platform(0x31DD,None,None),'surfaceless',None))
         query_ptr=e.eglGetProcAddress(b'eglQueryDevicesEXT')
-        if query_ptr:
+        if query_ptr and selected!='surfaceless':
             query=C.CFUNCTYPE(C.c_uint,C.c_int,C.POINTER(C.c_void_p),C.POINTER(C.c_int))(query_ptr)
             devices=(C.c_void_p*32)();count=C.c_int()
             if query(32,devices,C.byref(count)):
@@ -45,8 +52,9 @@ class EGLContext:
                 for index in indices:
                     if not 0<=index<count.value:raise RuntimeError('CYBR_EGL_DEVICE is outside the enumerated device range')
                     candidates.append((platform(0x313F,devices[index],None),'device',index))
-        if requested is not None and not candidates:raise RuntimeError('Requested EGL device is not available')
-        if requested is None:candidates.append((platform(0x31DD,None,None),'surfaceless',None))
+        if (requested is not None or selected=='device') and not candidates:raise RuntimeError('Requested EGL device is not available')
+        if requested is None and selected=='auto' and not surfaceless_first:
+            candidates.append((platform(0x31DD,None,None),'surfaceless',None))
         major,minor=C.c_int(),C.c_int();self.display=None
         for display,kind,index in candidates:
             if display and e.eglInitialize(display,C.byref(major),C.byref(minor)):
@@ -135,10 +143,10 @@ def open_context():
     choices = {"egl": EGLContext, "glfw": GLFWContext}
     if requested not in ("auto", *choices):
         raise ValueError("CYBR_GL_BACKEND must be auto, egl, or glfw")
-    order = (["egl", "glfw"] if sys.platform.startswith("linux") else ["glfw", "egl"])
+    order = (["egl", "glfw"] if sys.platform.startswith("linux") or sys.platform=="darwin" else ["glfw", "egl"])
     if requested != "auto":
         order = [requested]
-    elif os.environ.get("CYBR_EGL_DEVICE") is not None:
+    elif any(os.environ.get(key) is not None for key in ("CYBR_EGL_DEVICE", "CYBR_EGL_LIBRARY", "CYBR_EGL_PLATFORM")):
         order = ["egl"]
     errors = []
     for name in order:
@@ -146,8 +154,8 @@ def open_context():
             return choices[name]()
         except (RuntimeError, OSError, ImportError) as exc:
             errors.append(f"{name}: {exc}")
-    hint = (" Native macOS OpenGL stops at 4.1; this 4.5 compute engine needs "
-            "a compatible Linux/Windows OpenGL environment. CPU contract tests "
-            "and checkpoint tools remain available." if sys.platform == "darwin" else
+    hint = (" Apple's OpenGL stops at 4.1; use an existing native Mesa EGL/llvmpipe "
+            "installation with CYBR_GL_BACKEND=egl and CYBR_EGL_PLATFORM=surfaceless, "
+            "or the documented Linux container. Native macOS compute still requires actual driver verification." if sys.platform == "darwin" else
             " Install a current OpenGL 4.5 GPU driver, or Mesa for Linux software compute.")
     raise RuntimeError("No supported OpenGL compute context. " + " | ".join(errors) + hint)

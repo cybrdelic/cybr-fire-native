@@ -8,10 +8,11 @@ The numerical solver, chemistry and GLSL kernels are shared across backends. Con
 | --- | --- | --- |
 | Windows | Native hidden GLFW OpenGL context | OpenGL 4.5 driver and a desktop session; native numerical fields additionally require at least 12 image units; headless services may not expose the driver. |
 | Linux | Native EGL, then hidden GLFW fallback | OpenGL 4.5 vendor driver or Mesa; GLFW additionally needs a working display. |
-| macOS | Linux Mesa container | Existing Docker with Linux containers; Apple's native OpenGL 4.1 cannot execute these compute kernels. This is software compute, not Metal or native GPU support. |
+| macOS | Native Mesa EGL / llvmpipe | Existing compatible Mesa EGL installation; implemented discovery and verifier, pending actual Mac execution. CPU software execution of the same GLSL, not Metal. See [the native setup](docs/NATIVE_MACOS_MESA.md). |
+| macOS, Windows, Linux | Linux Mesa container | Existing Docker with Linux containers; a separate software-compute path. Linux container execution does not prove native macOS support. |
 | Any of these hosts | CPU contract/checkpoint tools | Python dependencies; these checks do not establish simulation correctness. |
 
-`CYBR_GL_BACKEND=auto` selects EGL first on Linux and GLFW first elsewhere. Set it explicitly to `egl` or `glfw` to require a particular backend. `CYBR_EGL_DEVICE` retains explicit EGL device selection. Backend errors are reported rather than hidden. Context creation is on the main thread. `doctor` separately reports `max_image_units` and `native_field_bindings_supported`. The Intel test adapter exposes 8 image units: small SSBO solver and sampled-volume paths can run, while native numerical fields reserve slots 8–11 and must reject that hardware. Allocating a texture alone no longer unnecessarily binds slot 8.
+`CYBR_GL_BACKEND=auto` selects EGL first on Linux/macOS and GLFW first on Windows. Set it explicitly to `egl` or `glfw` to require a particular backend. `CYBR_EGL_LIBRARY` selects an existing absolute library file; macOS also discovers Homebrew prefixes and uses bounded, read-only package-location queries. `CYBR_EGL_PLATFORM=surfaceless` selects headless Mesa; `device` selects enumerated EGL devices. `CYBR_EGL_DEVICE` retains explicit device selection and conflicts with explicit surfaceless selection. Explicit EGL settings are never silently replaced by GLFW. No loader installs packages or changes global environment/configuration. Backend errors are reported rather than hidden. GLFW context creation requires the main thread. `doctor` separately reports `max_image_units` and `native_field_bindings_supported`. The Intel test adapter exposes 8 image units: small SSBO solver and sampled-volume paths can run, while native numerical fields reserve slots 8 through 11 and must reject that hardware. Allocating a texture alone no longer unnecessarily binds slot 8.
 
 ## Fresh native setup
 
@@ -28,6 +29,7 @@ python -m pip install --no-compile -r requirements.txt
 python -m cybrfire.doctor --require-compute
 python checkpoint_guard/test_checkpoint_guard.py
 python tests/test_portable.py
+python tests/test_egl_backend.py
 python tests/test_portable_compute.py
 python tests/test_runtime.py
 python tests/test_detail.py
@@ -68,6 +70,6 @@ Checkpoint copies now flush writable handles, avoiding Windows' read-only `fsync
 
 Windows 11 / Python 3.12.10 / Intel UHD OpenGL 4.5 driver 31.0.101.4146: checkpoint regressions (2), portable CPU contracts (including native image-unit rejection), native-quality guards, camera contracts, and real compute dispatch/readback passed locally. Actual solver/transport/render results are recorded separately in the audit evidence; a full native production film has not been produced by these checks.
 
-The workflow runs CPU contracts on Windows, Ubuntu and macOS with Python 3.11/3.12, and actual small solver/transport tests inside Linux Mesa. Workflow configuration is not execution evidence: inspect the resulting CI run before claiming those jobs pass. Neither a Linux container run nor macOS CPU-only CI establishes an actual macOS Docker Desktop run.
+The workflow runs CPU contracts on Windows, Ubuntu and macOS with Python 3.11/3.12, and actual small solver/transport tests inside Linux Mesa. A separate native macOS job installs Mesa only on its hosted runner, verifies real compute/transport, and compares native-image and SSBO simulation/render output with identical explicit multigrid pressure settings. Workflow configuration is not execution evidence: native macOS remains unverified until that job actually passes. Neither a Linux container run nor macOS CPU-only CI establishes native macOS execution or an actual macOS Docker Desktop run.
 
 The original mature burner still requires the absent historical `v7-start.npz`. New independent scenes can start from their initial conditions; no replacement starting state has been fabricated.

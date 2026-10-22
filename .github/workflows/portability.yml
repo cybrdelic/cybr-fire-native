@@ -22,6 +22,7 @@ jobs:
       - run: python -m pip install --no-compile -r requirements.txt
       - run: python checkpoint_guard/test_checkpoint_guard.py
       - run: python tests/test_portable.py
+      - run: python tests/test_egl_backend.py
       - run: python tests/test_native_quality_guard.py
       - run: python tests/test_camera_native_quality.py
       - run: python -m cybrfire.doctor --no-probe
@@ -53,3 +54,50 @@ jobs:
         with:
           name: linux-mesa-smoke
           path: portable-output/
+  native-macos-mesa:
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      CYBR_GL_BACKEND: egl
+      CYBR_EGL_PLATFORM: surfaceless
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      GALLIUM_DRIVER: llvmpipe
+      LP_NUM_THREADS: "4"
+      OPENBLAS_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --no-compile -r requirements.txt
+      - name: Prepare Mesa on this hosted macOS runner
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          brew install mesa
+          prefix="$(brew --prefix mesa)"
+          library="$prefix/lib/libEGL.dylib"
+          if [[ ! -f "$library" ]]; then library="$prefix/lib/libEGL.1.dylib"; fi
+          if [[ ! -f "$library" ]]; then
+            echo "Installed Mesa does not provide an EGL dylib; native execution cannot be verified."
+            exit 1
+          fi
+          echo "CYBR_EGL_LIBRARY=$library" >> "$GITHUB_ENV"
+          brew list --versions mesa llvm > mesa-packages.txt
+      - run: python -m cybrfire.doctor --require-compute
+      - run: python tests/test_portable_compute.py
+      - run: python tests/test_runtime.py
+      - run: python tests/test_detail.py
+      - name: Verify actual native fields, multigrid, checkpoint and render parity
+        timeout-minutes: 8
+        run: python tools/verify_native_mesa.py --require-platform darwin --pressure multigrid --out outputs/native-mesa
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-macos-mesa-evidence
+          path: |
+            outputs/native-mesa/
+            mesa-packages.txt
+            evidence/runtime-tests.json
+            evidence-v8/detail-tests.json
