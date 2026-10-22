@@ -1,0 +1,55 @@
+#version 430
+#include "common.glsl"
+#include "solids.glsl"
+layout(std430,binding=0) buffer L {vec4 lighting[];};
+layout(binding=0) uniform sampler3D opticalTexture;
+layout(binding=6) uniform sampler3D previousLighting;
+layout(rgba32f,binding=1) writeonly uniform image3D lightingTexture;
+uniform int operation; // 0 sweep, 1 reconstruct, 2 clear
+uniform ivec3 sweepDirection;
+uniform vec3 boundaryLight;
+uniform float coarseSpacing;
+uniform float angularWeight;
+uniform float scatterAlbedo;
+uniform int scatterIteration;
+void main(){
+ int n=invocationIndex();
+ if(operation==2){if(n<cells(dims))lighting[n]=vec4(0.);return;}
+ if(operation==1){
+  if(n>=cells(dims))return;
+  ivec3 p=coord3(n,dims);vec3 sum=lighting[n].rgb*4.;float weight=4.;
+  for(int a=0;a<3;a++)for(int s=-1;s<=1;s+=2){ivec3 q=p;q[a]+=s;
+   if(all(greaterThanEqual(q,ivec3(0)))&&all(lessThan(q,dims))){sum+=lighting[index3(q,dims)].rgb;weight+=1.;}}
+  imageStore(lightingTexture,p,vec4(sum/weight,1.));return;
+ }
+ ivec3 stepper=abs(sweepDirection),start=ivec3(0);
+ bool diagonal=stepper.x+stepper.y+stepper.z==3;
+ if(diagonal){
+  int nx=dims.y*dims.z,ny=(dims.x-1)*dims.z,nz=(dims.x-1)*(dims.y-1);
+  if(n>=nx+ny+nz)return;
+  // Start each diagonal at precisely one entering face. Edges/corners belong
+  // to the first face, avoiding double counting and races in the accumulation.
+  if(n<nx)start=ivec3(0,n%dims.y,n/dims.y);
+  else if(n<nx+ny){int m=n-nx;start=ivec3(1+m%(dims.x-1),0,m/(dims.x-1));}
+  else {int m=n-nx-ny;start=ivec3(1+m%(dims.x-1),1+m/(dims.x-1),0);}
+ }else{
+  int a=stepper.x==1?0:(stepper.y==1?1:2),b=(a+1)%3,c=(a+2)%3;
+  if(n>=dims[b]*dims[c])return;
+  start[b]=n%dims[b];start[c]=n/dims[b];
+ }
+ vec3 L=boundaryLight;float distance=coarseSpacing*length(vec3(stepper));
+ for(ivec3 u=start;all(lessThan(u,dims));u+=stepper){
+  ivec3 p=u;for(int a=0;a<3;a++)if(sweepDirection[a]<0)p[a]=dims[a]-1-u[a];
+  vec3 uv=(vec3(p)+.5)/vec3(dims);
+  if(solidCount>0&&solidDistance(uv*vec3(dims)*coarseSpacing)<0.){L=vec3(0.);continue;}
+  vec4 o=textureLod(opticalTexture,uv,0.);
+  vec3 emitted=o.rgb;
+  if(scatterIteration>0)emitted+=o.a*scatterAlbedo*textureLod(previousLighting,uv,0.).rgb;
+  float tau=o.a*distance,halfTr=exp(-.5*tau),Tr=halfTr*halfTr;
+  // Avoid divide-by-zero and cancellation for optically thin cells.
+  float fullI=tau<.001?distance*(1.-.5*tau+tau*tau/6.):(1.-Tr)/o.a;
+  float halfI=tau<.001?.5*distance*(1.-.25*tau+tau*tau/24.):(1.-halfTr)/o.a;
+  lighting[index3(p,dims)]+=vec4(angularWeight*(L*halfTr+emitted*halfI),0.);
+  L=L*Tr+emitted*fullI;
+ }
+}

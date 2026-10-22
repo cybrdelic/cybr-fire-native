@@ -1,0 +1,95 @@
+{
+  "status": "native_checkpoint_remote_roundtrip_passed",
+  "remote_receipt": {
+    "generation": "jet-p0002-t000005-f0001",
+    "status": "uploaded_and_downloaded_hash_match",
+    "archive_sha256": "617581abb9e91897560c477aa0d5929b768d310f3fcb7eb14c4ad1988b77b90a",
+    "downloaded_bytes": 203096548,
+    "checked_unix_time": 1792677084.159068
+  },
+  "archive_bytes": 203096548,
+  "verified_file_count": 16,
+  "uncompressed_payload_bytes": 2193483247,
+  "native_parent_grid": [
+    160,
+    280,
+    160
+  ],
+  "native_parent_cells": 7168000,
+  "native_fine_grid": [
+    384,
+    672,
+    384
+  ],
+  "native_fine_scalar_cells": 99090432,
+  "fine_state_file_bytes": 1585447040,
+  "restored_fine_state": {
+    "minimum": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "maximum": [
+      0.08744864165782928,
+      0.2587578594684601,
+      3205838.75,
+      0.0019892628770321608
+    ],
+    "cells_with_positive_energy": 71181
+  },
+  "semantic_state": {
+    "parent_snapshots": 2,
+    "parent_tick": 5,
+    "parent_sim_time": 0.041666666666666664,
+    "last_parent_snapshot_time": 0.041666666666666664,
+    "fine_intervals": 1,
+    "rendered_frames": 0,
+    "dependencies": [
+      "RUN_SETTINGS.json",
+      "capture/capture.json",
+      "capture/fine-state-00001.npy",
+      "parent/initial-q.npy",
+      "parent/manifest.json",
+      "parent/restart.npz",
+      "parent/velocity-000.npy",
+      "parent/velocity-001.npy",
+      "provenance/advance_guarded_fine.py",
+      "provenance/advance_guarded_parent.py",
+      "provenance/checkpoint_guard.py",
+      "provenance/checkpoint_guard_original.zip",
+      "provenance/commit_v8.py",
+      "provenance/engine_source.zip",
+      "provenance/test_checkpoint_guard.py",
+      "provenance/v8_guarded.py"
+    ]
+  },
+  "checks": {
+    "download_sha256_matches_upload": true,
+    "zip_crc_passed": true,
+    "all_checkpoint_files_verified": true,
+    "clean_directory_restore_passed": true,
+    "native_grid_semantic_audit_passed": true,
+    "missing_velocity_rejected": true,
+    "failed_commit_preserved_latest": true,
+    "corrupt_fine_field_rejected": true,
+    "restore_refuses_overwrite": true,
+    "restored_fine_field_finite": true,
+    "restored_fine_field_is_not_all_zero": true
+  },
+  "video_frames_produced_this_turn": 0,
+  "physics_interval_seconds": 0.041666666666666664,
+  "warmup_intervals_completed": 1,
+  "warmup_intervals_target": 4,
+  "video_target_frames": 120,
+  "no_background_render_running": true,
+  "limits": [
+    "This verifies persistence and restoration, not final fire realism or completion of a 4K video.",
+    "Remote upload/download is executed through the Files connector; Python refuses to advance without its receipt.",
+    "Library retention is subject to the user retaining these saved files."
+  ],
+  "publication_review": {
+    "basis": "Historical project report; large checkpoint not independently downloaded or restored for this source publication.",
+    "private_identifiers_removed": true
+  }
+}

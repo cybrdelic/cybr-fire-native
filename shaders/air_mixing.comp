@@ -1,0 +1,26 @@
+#version 430
+#include "common.glsl"
+// Turbulent entrainment closure in the unresolved near-surface mixing layer.
+// Ambient air has zero fuel, zero oxygen deficit and zero sensible enthalpy.
+// This is an open-region mass exchange approximation, not a closed box.
+#ifdef NATIVE_FIELDS
+layout(rgba32f,binding=8) uniform image3D state;
+vec4 readQ(int n){return imageLoad(state,coord3(n,dims));}
+void writeQ(int n,vec4 q){imageStore(state,coord3(n,dims),q);}
+#else
+layout(std430,binding=0) buffer State{vec4 qArray[];};
+vec4 readQ(int n){return qArray[n];}
+void writeQ(int n,vec4 q){qArray[n]=q;}
+#endif
+uniform float entrainmentRate;
+uniform float entrainmentHeight;
+void main(){
+ int n=invocationIndex(); if(n>=cells(dims))return;
+ ivec3 c=coord3(n,dims);
+ float y=(float(c.y)+.5)*spacing;
+ if(y>=entrainmentHeight)return;
+ // Finite-volume relaxation to clean ambient at the near-ground mixing edge.
+ float profile=pow(max(0.,1.-y/entrainmentHeight),2.);
+ float remaining=exp(-entrainmentRate*dt*profile);
+ vec4 q=readQ(n);writeQ(n,q*remaining);
+}

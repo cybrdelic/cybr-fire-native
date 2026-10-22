@@ -1,0 +1,120 @@
+{
+  "passed": 23,
+  "failed": 0,
+  "checks": [
+    {
+      "name": "gas_parity_tick_1",
+      "passed": true,
+      "maximum_absolute_error": 0.0
+    },
+    {
+      "name": "velocity_parity_tick_1",
+      "passed": true,
+      "maximum_absolute_error": 0.0
+    },
+    {
+      "name": "particles_parity_tick_1",
+      "passed": true,
+      "maximum_absolute_error": 0.0
+    },
+    {
+      "name": "gas_parity_tick_4",
+      "passed": true,
+      "maximum_absolute_error": 0.0
+    },
+    {
+      "name": "velocity_parity_tick_4",
+      "passed": true,
+      "maximum_absolute_error": 0.0
+    },
+    {
+      "name": "particles_parity_tick_4",
+      "passed": true,
+      "maximum_absolute_error": 0.0
+    },
+    {
+      "name": "gas_parity_tick_12",
+      "passed": true,
+      "maximum_absolute_error": 0.0
+    },
+    {
+      "name": "velocity_parity_tick_12",
+      "passed": true,
+      "maximum_absolute_error": 0.0
+    },
+    {
+      "name": "particles_parity_tick_12",
+      "passed": true,
+      "maximum_absolute_error": 0.0
+    },
+    {
+      "name": "transport_kind_0_periodic_False",
+      "passed": true,
+      "maximum_absolute_error": 0.0
+    },
+    {
+      "name": "transport_kind_0_periodic_True",
+      "passed": true,
+      "maximum_absolute_error": 0.0
+    },
+    {
+      "name": "transport_kind_1_periodic_False",
+      "passed": true,
+      "maximum_absolute_error": 0.0
+    },
+    {
+      "name": "transport_kind_1_periodic_True",
+      "passed": true,
+      "maximum_absolute_error": 0.0
+    },
+    {
+      "name": "render_hdr_parity",
+      "passed": true,
+      "maximum_absolute_error": 0.0
+    },
+    {
+      "name": "scratch_aliases_are_predictors",
+      "passed": true
+    },
+    {
+      "name": "published_state_disjoint_from_scratch",
+      "passed": true
+    },
+    {
+      "name": "native_checkpoint_restore",
+      "passed": true
+    },
+    {
+      "name": "native_zero_57344",
+      "passed": true
+    },
+    {
+      "name": "native_zero_62073",
+      "passed": true
+    },
+    {
+      "name": "new_grid_budget",
+      "passed": true
+    },
+    {
+      "name": "oversized_legacy_backend_rejected",
+      "passed": true
+    },
+    {
+      "name": "beyond_128MiB_roundtrip",
+      "passed": true,
+      "bytes": 141295616,
+      "cells": 8830976,
+      "sentinel_indices": [
+        0,
+        8388607,
+        8388608,
+        8830975
+      ]
+    },
+    {
+      "name": "field_close_idempotent",
+      "passed": true
+    }
+  ]
+}

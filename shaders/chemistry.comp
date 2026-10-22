@@ -1,0 +1,59 @@
+#version 430
+#include "common.glsl"
+
+#ifdef NATIVE_FIELDS
+layout(rgba32f,binding=8)  uniform image3D field_state;
+vec4 load_state(int n){return imageLoad(field_state,coord3(n,imageSize(field_state)));}
+void store_state(int n,vec4 value){imageStore(field_state,coord3(n,imageSize(field_state)),value);}
+#else
+layout(std430,binding=0) buffer Q {vec4 state[];};
+vec4 load_state(int n){return state[n];}
+void store_state(int n,vec4 value){state[n]=value;}
+#endif
+
+
+#ifdef NATIVE_FIELDS
+layout(rgba32f,binding=9) writeonly uniform image3D field_budget;
+void store_budget(int n,vec4 value){
+#ifndef DETAIL_NO_BUDGET
+imageStore(field_budget,coord3(n,imageSize(field_budget)),value);
+#endif
+}
+#else
+layout(std430,binding=1) writeonly buffer B {vec4 budget[];};
+void store_budget(int n,vec4 value){budget[n]=value;}
+#endif
+
+uniform float oxygenAmbient;
+uniform float capacity;
+uniform float heatRelease;
+uniform float sootYield;
+uniform float reactionRate;
+uniform float coolingRate;
+uniform float radiationCoefficient;
+uniform float sootOxidation;
+void main(){
+ int n=invocationIndex();if(n>=cells(dims))return;
+ vec4 q=load_state(n),old=q;
+ float O=max(oxygenAmbient-q.y,0.),T=300.+q.z/capacity;
+ float stoich=3.43-sootYield*2.667;
+ float b=min(q.x,O/stoich)*(1.-exp(-reactionRate*smoothstep(620.,950.,T)*dt));
+ float formed=b*sootYield;
+ q.x-=b;q.y+=b*stoich;q.w+=formed;q.z+=b*heatRelease-formed*32.8e6;
+ O=max(oxygenAmbient-q.y,0.);
+ float ox=min(q.w,O/2.667)*(1.-exp(-sootOxidation*(O/oxygenAmbient)*smoothstep(950.,1450.,300.+q.z/capacity)*dt));
+ q.w-=ox;q.y+=ox*2.667;q.z+=ox*32.8e6;
+ float before=q.z;
+ // Monotone implicit convection/radiation, bounded Newton iterations.
+ float lo=0.,hi=q.z,E=q.z;
+ float coef=radiationCoefficient*q.w;
+ for(int k=0;k<10;k++){
+  T=300.+E/capacity;float t2=T*T;
+  float f=E+dt*(coolingRate*E+coef*(t2*t2-8.1e9))-before;
+  if(f>0.)hi=E;else lo=E;
+  float candidate=E-f/(1.+dt*(coolingRate+coef*4.*t2*T/capacity));
+  if(abs(f)<max(1.e-3,1.e-6*before))break;
+  E=(candidate>=lo&&candidate<=hi)?candidate:.5*(lo+hi);
+ }
+ q.z=E;store_state(n,q);store_budget(n,vec4(b,ox,before-E,formed));
+}

@@ -1,0 +1,91 @@
+#version 430
+#include "common.glsl"
+
+#ifdef NATIVE_FIELDS
+layout(rgba32f,binding=8)  uniform image3D field_velocity;
+vec4 load_velocity(int n){return imageLoad(field_velocity,coord3(n,imageSize(field_velocity)));}
+void store_velocity(int n,vec4 value){imageStore(field_velocity,coord3(n,imageSize(field_velocity)),value);}
+#else
+layout(std430,binding=0) buffer V {vec4 velocity[];};
+vec4 load_velocity(int n){return velocity[n];}
+void store_velocity(int n,vec4 value){velocity[n]=value;}
+#endif
+
+
+#ifdef NATIVE_FIELDS
+layout(rgba32f,binding=9) readonly uniform image3D field_state;
+vec4 load_state(int n){return imageLoad(field_state,coord3(n,imageSize(field_state)));}
+#else
+layout(std430,binding=1) readonly buffer Q {vec4 state[];};
+vec4 load_state(int n){return state[n];}
+#endif
+
+
+#ifdef NATIVE_FIELDS
+layout(rgba32f,binding=10)  uniform image3D field_omega;
+vec4 load_omega(int n){return imageLoad(field_omega,coord3(n,imageSize(field_omega)));}
+void store_omega(int n,vec4 value){imageStore(field_omega,coord3(n,imageSize(field_omega)),value);}
+#else
+layout(std430,binding=2) buffer W {vec4 omega[];};
+vec4 load_omega(int n){return omega[n];}
+void store_omega(int n,vec4 value){omega[n]=value;}
+#endif
+
+
+#ifdef NATIVE_FIELDS
+layout(rgba32f,binding=11)  uniform image3D field_assembledForce;
+vec4 load_assembledForce(int n){return imageLoad(field_assembledForce,coord3(n,imageSize(field_assembledForce)));}
+void store_assembledForce(int n,vec4 value){imageStore(field_assembledForce,coord3(n,imageSize(field_assembledForce)),value);}
+#else
+layout(std430,binding=3) buffer F {vec4 assembledForce[];};
+vec4 load_assembledForce(int n){return assembledForce[n];}
+void store_assembledForce(int n,vec4 value){assembledForce[n]=value;}
+#endif
+
+uniform int operation;
+uniform float capacity;
+uniform float confinement;
+uniform float buoyancy;
+uniform vec3 wind;
+uniform float drag;
+uniform float maxTurbulentAcceleration;
+vec3 cellV(ivec3 g){
+ g=clamp(g,ivec3(0),dims-1);vec3 v=vec3(0);
+ for(int a=0;a<3;a++){ivec3 p=g;p[a]++;v[a]=.5*(load_velocity(index3(g,dims+1))[a]+load_velocity(index3(p,dims+1))[a]);}return v;
+}
+vec4 qAt(ivec3 g){return load_state(index3(clamp(g,ivec3(0),dims-1),dims));}
+float omAt(ivec3 g){return load_omega(index3(clamp(g,ivec3(0),dims-1),dims)).w;}
+vec3 acceleration(ivec3 g){
+ g=clamp(g,ivec3(0),dims-1);int m=index3(g,dims);vec4 q=qAt(g);
+ vec3 grad=vec3(omAt(g+ivec3(1,0,0))-omAt(g-ivec3(1,0,0)),omAt(g+ivec3(0,1,0))-omAt(g-ivec3(0,1,0)),omAt(g+ivec3(0,0,1))-omAt(g-ivec3(0,0,1)))/(2.*spacing);
+ vec3 normal=grad/(length(grad)+1.e-7);
+ float activity=smoothstep(5.,180.,q.z/capacity);
+ vec3 vort=confinement*spacing*cross(normal,load_omega(m).xyz)*activity;
+ // Local acceleration ceiling prevents isolated high-curl cells accumulating
+ // unlimited work. This is a VFX closure, not a claim of an LES energy cascade.
+ vort*=min(1.,maxTurbulentAcceleration/(length(vort)+1.e-8));
+ float excess=q.z/capacity;
+ vec3 force=vort+vec3(0.,buoyancy*excess/(300.+excess),0.);
+ return force;
+}
+void main(){
+ int n=invocationIndex();
+ if(operation==0){
+  if(n>=cells(dims))return;ivec3 g=coord3(n,dims);
+  vec3 dx=(cellV(g+ivec3(1,0,0))-cellV(g-ivec3(1,0,0)))/(2.*spacing);
+  vec3 dy=(cellV(g+ivec3(0,1,0))-cellV(g-ivec3(0,1,0)))/(2.*spacing);
+  vec3 dz=(cellV(g+ivec3(0,0,1))-cellV(g-ivec3(0,0,1)))/(2.*spacing);
+  vec3 o=vec3(dy.z-dz.y,dz.x-dx.z,dx.y-dy.x);store_omega(n,vec4(o,length(o)));
+ }else if(operation==1){
+  if(n>=cells(dims))return;store_assembledForce(n,vec4(acceleration(coord3(n,dims)),0.));
+ }else{
+  if(n>=cells(dims+1))return;ivec3 g=coord3(n,dims+1);vec4 v=load_velocity(n);
+  for(int a=0;a<3;a++){
+   ivec3 vd=dims;vd[a]++;if(any(greaterThanEqual(g,vd)))continue;
+   ivec3 lo=g;lo[a]--;lo=clamp(lo,ivec3(0),dims-1);ivec3 hi=clamp(g,ivec3(0),dims-1);
+   float f=.5*(load_assembledForce(index3(lo,dims))[a]+load_assembledForce(index3(hi,dims))[a]);
+   v[a]=(v[a]+dt*(f+drag*wind[a]))/(1.+drag*dt);
+   if(a==1&&g.y==0)v[a]=0.;
+  }store_velocity(n,v);
+ }
+}

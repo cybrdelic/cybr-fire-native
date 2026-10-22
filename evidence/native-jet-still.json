@@ -1,0 +1,57 @@
+{
+  "status": "native_4k_still_rendered_not_showcase_complete",
+  "parent_solver": {
+    "grid": [
+      160,
+      280,
+      160
+    ],
+    "cells": 7168000,
+    "snapshots": 9,
+    "time_end": 0.3333333333333333,
+    "complete": true
+  },
+  "fine_transport": {
+    "shape": [
+      384,
+      672,
+      384
+    ],
+    "cells": 99090432,
+    "fine_pressure_solver": false,
+    "flow_scale": 2
+  },
+  "captured_original_camera": {
+    "raster": [
+      2160,
+      3840
+    ],
+    "unique_real_simulation_frames": 2,
+    "frame_hashes": [
+      "ac21ab7f90f3483f89b4b2a39044b12115691763e423a078faa8f5c15ecb6096",
+      "e70a17ea0aaa0c822bd7b22317e245f98beecce78dd0c84b50052e44f0b25f0c"
+    ],
+    "status": "running"
+  },
+  "reframed_native_still": {
+    "file": "media/native-jet-still.png",
+    "raster": [
+      3840,
+      2160
+    ],
+    "pixels": 8294400,
+    "sha256": "f53b5d3aeadcc1d6854b76ee909e08b7d88fe62cc590f7951098b39ad4fb22d9",
+    "exposure": 0.009,
+    "camera_target_x_m": 0.58,
+    "camera_distance_m": 1.25,
+    "samples_per_pixel": 2,
+    "no_upscaling": true,
+    "source_fine_state": "fine-state-00006.npy"
+  },
+  "limitations": [
+    "not a completed multi-scene showcase",
+    "not longer than 2 physically evolved output frames",
+    "subject is a cold-start flame jet, not a fully developed plume",
+    "does not establish visual parity with original 24-frame V8 mature burner"
+  ]
+}

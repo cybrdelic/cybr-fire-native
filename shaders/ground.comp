@@ -1,0 +1,49 @@
+#version 430
+#include "common.glsl"
+#include "solids.glsl"
+#include "volume_sampling.glsl"
+layout(binding=0) uniform sampler3D opticalTexture;
+layout(binding=1) uniform sampler3D lightingTexture;
+layout(rgba32f,binding=5) writeonly uniform image3D groundTexture;
+uniform int resolution;
+uniform int directions;
+uniform float scatterAlbedo;
+uniform vec3 patchOrigin;
+uniform vec3 patchExtent;
+vec3 incident(vec3 ro,vec3 rd,vec3 size){
+ vec2 hit=volumeBoxHit(ro,rd,size);float entry=max(hit.x,0.),end=hit.y;
+ int object;end=min(end,firstSolidHit(ro,rd,object));
+ vec3 L=vec3(0);float Tr=1.,ds=spacing*1.5;
+ int count=int(ceil(max(end-entry,0.)/ds));
+ int spanEnd=0;
+ for(int k=0;k<count;){
+  if(Tr<transmittanceCutoff)break;
+  float t=entry+float(k)*ds,len=min(ds,end-t),sampleT=t+.5*len;
+  vec3 p=ro+rd*sampleT;
+  if(k>=spanEnd){
+   int next=skipEmptySamples(p,rd,entry,sampleT,ds,.5,k,count,spanEnd);
+   if(next!=k){k=next;continue;}
+  }
+  vec3 uv=p/size;vec4 o=textureLod(opticalTexture,uv,0.);
+  float tau=o.a*len,a=segmentAlpha(tau),integral=segmentIntegral(tau,len,o.a);
+  vec3 Li=textureLod(lightingTexture,uv,0.).rgb;
+  L+=Tr*(o.rgb*integral+scatterAlbedo*Li*a);Tr*=1.-a;k++;
+ }
+ return L;
+}
+void main(){
+ int n=invocationIndex();if(n>=resolution*resolution)return;
+ ivec2 g=ivec2(n%resolution,n/resolution);
+ vec2 uv=(vec2(g)+.5)/float(resolution);
+ vec3 ro=patchOrigin+vec3(uv.x*patchExtent.x,.001,uv.y*patchExtent.z);
+ vec3 size=vec3(dims)*spacing;vec3 E=vec3(0);
+ // Cosine-weighted hemisphere quadrature: mean radiance equals E/pi.
+ // A fixed per-texel azimuth rotation decorrelates bands without temporal noise.
+ float rotation=6.28318530718*rand01(uint(n*173+7919));
+ for(int k=0;k<directions;k++){
+  float u=(float(k)+.5)/float(directions),phi=2.39996322973*float(k)+rotation;
+  float r=sqrt(u);vec3 rd=vec3(r*cos(phi),sqrt(1.-u),r*sin(phi));
+  E+=incident(ro,rd,size);
+ }
+ imageStore(groundTexture,ivec3(g.x,0,g.y),vec4(E/float(directions),1.));
+}

@@ -1,0 +1,93 @@
+#version 430
+#include "common.glsl"
+#include "solids.glsl"
+struct Particle {vec4 positionRadius;vec4 velocityTemperature;vec4 previousAge;vec4 identity;};
+layout(std430,binding=0) buffer P {Particle particles[];};
+
+#ifdef NATIVE_FIELDS
+layout(rgba32f,binding=9) readonly uniform image3D field_gas;
+vec4 load_gas(int n){return imageLoad(field_gas,coord3(n,imageSize(field_gas)));}
+#else
+layout(std430,binding=1) readonly buffer Q {vec4 gas[];};
+vec4 load_gas(int n){return gas[n];}
+#endif
+
+
+#ifdef NATIVE_FIELDS
+layout(rgba32f,binding=10) readonly uniform image3D field_velocity;
+vec4 load_velocity(int n){return imageLoad(field_velocity,coord3(n,imageSize(field_velocity)));}
+#else
+layout(std430,binding=2) readonly buffer V {vec4 velocity[];};
+vec4 load_velocity(int n){return velocity[n];}
+#endif
+
+layout(std430,binding=3) readonly buffer S {vec4 sources[];};
+layout(std430,binding=5) readonly buffer C {vec4 commands[];};
+uniform int operation,capacityParticles,birthCount,seed;
+uniform float time,density,particleCapacity,dragCoefficient,heatTransfer,emissivity,burnRate,lifetime,restitution,friction,gasCapacity,birthTemperature;
+uniform vec4 radiusRange;
+uniform vec3 launchVelocity;
+uniform float oxygenAmbient,oxidationHeat,retainedFraction;
+vec4 gasAt(vec3 x){
+ vec3 p=x/spacing-.5;ivec3 b=ivec3(floor(p));vec3 t=fract(p);vec4 value=vec4(0.);
+ for(int k=0;k<2;k++)for(int j=0;j<2;j++)for(int i=0;i<2;i++){
+  ivec3 q=b+ivec3(i,j,k);if(any(lessThan(q,ivec3(0)))||any(greaterThanEqual(q,dims)))continue;
+  vec3 w=mix(1.-t,t,vec3(i,j,k));value+=w.x*w.y*w.z*load_gas(index3(q,dims));
+ }return value;
+}
+vec3 velocityAt(vec3 x){
+ vec3 result=vec3(0.);
+ for(int a=0;a<3;a++){
+  vec3 p=x/spacing-faceOffset(a);ivec3 b=ivec3(floor(p)),d=dims;d[a]++;vec3 t=fract(p);
+  for(int k=0;k<2;k++)for(int j=0;j<2;j++)for(int i=0;i<2;i++){
+   ivec3 q=clamp(b+ivec3(i,j,k),ivec3(0),d-1);vec3 w=mix(1.-t,t,vec3(i,j,k));result[a]+=w.x*w.y*w.z*load_velocity(index3(q,dims+1))[a];
+  }
+ }return result;
+}
+Particle advanceParticle(Particle p,float stepDt){
+ vec3 x=p.positionRadius.xyz,v=p.velocityTemperature.xyz;float radius=p.positionRadius.w;
+ vec3 flow=velocityAt(x);float gasT=300.+gasAt(x).z/gasCapacity;
+ float rate=3.*1.2*dragCoefficient*length(flow-v)/(8.*density*radius);
+ vec3 updated=(v+stepDt*(rate*flow+vec3(0.,-9.81,0.)))/(1.+stepDt*rate),next=x+stepDt*.5*(v+updated);
+ int which;vec3 delta=next-x;float travel=length(delta);
+ if(travel>1.e-8&&solidCount>0){
+  float t=firstSolidHit(x,delta/travel,which);
+  if(t<travel){vec3 hit=x+delta/travel*t,normal=solidNormal(hit,which);next=hit+normal*(radius+1.e-4);
+   float vn=dot(updated,normal);if(vn<0.)updated=(updated-vn*normal)*(1.-friction)-restitution*vn*normal;}
+ }
+ for(int i=0;i<solidCount;i++){
+  float distance=sdfOne(next,i);
+  if(distance<radius){vec3 normal=solidNormal(next,i);next+=normal*(radius-distance+1.e-4);
+   float vn=dot(updated,normal);if(vn<0.)updated=(updated-vn*normal)*(1.-friction)-restitution*vn*normal;}
+ }
+ if(next.y<radius){next.y=radius;if(updated.y<0.)updated.y=-updated.y*restitution;updated.xz*=1.-friction;}
+ float oldT=p.velocityTemperature.w,oxygen=max(oxygenAmbient-gasAt(x).y,0.)/oxygenAmbient;
+ float radialRate=burnRate*oxygen*smoothstep(650.,1000.,oldT),newRadius=max(radius-stepDt*radialRate,radiusRange.x*.1);
+ // Integrated shrinking-body chemical heating. Unretained heat/products leave
+ // the one-way model; they are never silently injected into the gas solver.
+ oldT+=3.*oxidationHeat*retainedFraction/particleCapacity*log(radius/newRadius);
+ float convection=3.*heatTransfer/(density*particleCapacity*radius),radiation=3.*emissivity*5.670374419e-8/(density*particleCapacity*radius);
+ float lo=300.,hi=max(max(oldT,gasT),300.),temperature=clamp(oldT,lo,hi);
+ for(int j=0;j<12;j++){
+  float t2=temperature*temperature,f=temperature+stepDt*(convection*(temperature-gasT)+radiation*(t2*t2-8.1e9))-oldT;
+  if(abs(f)<1.e-4)break;if(f>0.)hi=temperature;else lo=temperature;
+  float trial=temperature-f/(1.+stepDt*(convection+4.*radiation*t2*temperature));temperature=trial>=lo&&trial<=hi?trial:.5*(lo+hi);
+ }
+ radius=newRadius;p.previousAge=vec4(x,p.previousAge.w+stepDt);p.positionRadius=vec4(next,radius);p.velocityTemperature=vec4(updated,temperature);
+ vec3 size=vec3(dims)*spacing;
+ if(p.previousAge.w>=lifetime||radius<radiusRange.x*.15||next.x<0.||next.z<0.||next.x>size.x||next.z>size.z||next.y>size.y||temperature<390.)p.positionRadius.w=0.;
+ return p;
+}
+void main(){
+ int n=invocationIndex();
+ if(operation==0){if(n>=capacityParticles)return;Particle p=particles[n];if(p.positionRadius.w<=0.)return;particles[n]=advanceParticle(p,dt);return;}
+ if(n>=birthCount)return;vec4 cmd=commands[n];int slot=int(cmd.x),s=int(cmd.y);uint id=uint(cmd.w)+uint(seed)*65537u;
+ float z=2.*rand01(id)-1.,angle=6.28318530718*rand01(id+103u),r=pow(rand01(id+331u),1./3.);
+ vec3 unit=vec3(sqrt(max(0.,1.-z*z))*cos(angle),z,sqrt(max(0.,1.-z*z))*sin(angle))*r;
+ vec3 center=sources[s*8].xyz+sources[s*8+7].xyz*max(cmd.z-sources[s*8].w,0.);
+ float radius=mix(radiusRange.x,radiusRange.y,rand01(id+71u));vec3 x=center+unit*sources[s*8+1].xyz;x.y=max(x.y,radius+1.e-4);
+ Particle p;p.positionRadius=vec4(x,radius);p.velocityTemperature=vec4(velocityAt(x)+launchVelocity,birthTemperature);
+ p.previousAge=vec4(x,0.);p.identity=vec4(cmd.w,cmd.z,radius,float(s));
+ if(solidDistance(x)<radius)p.positionRadius.w=0.;
+ if(p.positionRadius.w>0.)p=advanceParticle(p,max(0.,time+dt-cmd.z));particles[slot]=p;
+}

@@ -1,0 +1,67 @@
+{
+  "purpose": "Reduced-grid emitter-domain repair for CYBR FIRE V8 simulation",
+  "failure": {
+    "old_grid": [
+      64,
+      112,
+      64
+    ],
+    "old_spacing_m": 0.012,
+    "incorrect_domain_extent_m": [
+      0.768,
+      1.344,
+      0.768
+    ],
+    "emitter_center_m": [
+      0.96,
+      0.12,
+      0.96
+    ],
+    "emitter_was_outside": true
+  },
+  "fix": {
+    "new_grid": [
+      64,
+      112,
+      64
+    ],
+    "new_spacing_m": 0.03,
+    "corrected_domain_extent_m": [
+      1.92,
+      3.36,
+      1.92
+    ],
+    "emitter_inside_domain": true,
+    "conservative_scalar_remesh": true,
+    "staggered_velocity_remap": true
+  },
+  "video": {
+    "file": "capture/corrected_fire_24fps.mp4",
+    "fps": 24,
+    "duration_s": 1.0,
+    "dimensions": [
+      540,
+      960
+    ],
+    "decoded_frames": 24,
+    "fine_grid": [
+      192,
+      336,
+      192
+    ],
+    "unique_simulated_frames": 24,
+    "bright_flame_pixels_min": 29512,
+    "bright_flame_pixels_max": 37645,
+    "local_source_fuel_min": 0.02771199680864811,
+    "local_source_heat_min": 2110990.5,
+    "video_sha256": "0f68be1f66a435399864a0e1169f045e1294df80b171916e200476252f3dcdd8",
+    "full_v8_fidelity": false,
+    "no_looping": true
+  },
+  "tests": {
+    "physics_source_in_domain": true,
+    "all_frames_have_bright_flame": true,
+    "frame_hashes_distinct": true,
+    "capture_decode_complete": true
+  }
+}

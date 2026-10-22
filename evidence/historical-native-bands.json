@@ -1,0 +1,51 @@
+{
+  "status": "tested_incremental_band_rendering",
+  "scene": "jet",
+  "parent_snapshots": 10,
+  "parent_grid": [
+    160,
+    280,
+    160
+  ],
+  "fine_grid": [
+    384,
+    672,
+    384
+  ],
+  "native_resolution": [
+    3840,
+    2160
+  ],
+  "frame_index": 0,
+  "fine_state_advanced_and_saved": true,
+  "bands_complete": 4,
+  "bands_total": 90,
+  "full_frame_complete": false,
+  "video_complete": false,
+  "bands": {
+    "0": {
+      "path": "bands/0000/0000.png",
+      "sha256": "14615f7594f88f82e00f7a8574b74fa241ca8720c188f99f386ce64948201817",
+      "y": 0,
+      "height": 24
+    },
+    "1": {
+      "path": "bands/0000/0001.png",
+      "sha256": "14615f7594f88f82e00f7a8574b74fa241ca8720c188f99f386ce64948201817",
+      "y": 24,
+      "height": 24
+    },
+    "2": {
+      "path": "bands/0000/0002.png",
+      "sha256": "14615f7594f88f82e00f7a8574b74fa241ca8720c188f99f386ce64948201817",
+      "y": 48,
+      "height": 24
+    },
+    "3": {
+      "path": "bands/0000/0003.png",
+      "sha256": "14615f7594f88f82e00f7a8574b74fa241ca8720c188f99f386ce64948201817",
+      "y": 72,
+      "height": 24
+    }
+  }
+}

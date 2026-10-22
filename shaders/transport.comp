@@ -1,0 +1,151 @@
+#version 430
+#include "common.glsl"
+#include "solids.glsl"
+
+#ifdef NATIVE_FIELDS
+layout(rgba32f,binding=8) readonly uniform image3D field_original;
+vec4 load_original(int n){return imageLoad(field_original,coord3(n,imageSize(field_original)));}
+#else
+layout(std430,binding=0) readonly buffer A {vec4 original[];};
+vec4 load_original(int n){return original[n];}
+#endif
+
+
+#ifdef NATIVE_FIELDS
+layout(rgba32f,binding=9) readonly uniform image3D field_predicted;
+vec4 load_predicted(int n){return imageLoad(field_predicted,coord3(n,imageSize(field_predicted)));}
+#else
+layout(std430,binding=1) readonly buffer B {vec4 predicted[];};
+vec4 load_predicted(int n){return predicted[n];}
+#endif
+
+
+#ifdef NATIVE_FIELDS
+layout(rgba32f,binding=10) readonly uniform image3D field_velocity;
+vec4 load_velocity(int n){return imageLoad(field_velocity,coord3(n,imageSize(field_velocity)));}
+#else
+layout(std430,binding=2) readonly buffer V {vec4 velocity[];};
+vec4 load_velocity(int n){return velocity[n];}
+#endif
+
+
+#ifdef NATIVE_FIELDS
+layout(rgba32f,binding=11) writeonly uniform image3D field_outputField;
+void store_outputField(int n,vec4 value){imageStore(field_outputField,coord3(n,imageSize(field_outputField)),value);}
+#else
+layout(std430,binding=3) writeonly buffer C {vec4 outputField[];};
+void store_outputField(int n,vec4 value){outputField[n]=value;}
+#endif
+
+#ifdef TRANSPORT_KIND
+const int velocityField=TRANSPORT_KIND;
+#else
+uniform int velocityField;
+#endif
+#ifdef TRANSPORT_CORRECTION
+const int correction=TRANSPORT_CORRECTION;
+#else
+uniform int correction;
+#endif
+uniform int periodic;
+uniform float traceCourant;
+uniform int maxTraceSteps;
+#ifdef TEXTURE_TRANSPORT
+layout(binding=2) uniform sampler3D originalTexture;
+layout(binding=3) uniform sampler3D predictedTexture;
+layout(binding=4) uniform sampler3D velocityTexture;
+layout(rgba32f,binding=3) writeonly uniform image3D predictionImage;
+#endif
+ivec3 address(ivec3 p,ivec3 d){if(periodic==1)return p-ivec3(floor(vec3(p)/vec3(d)))*d;return clamp(p,ivec3(0),d-1);}
+float getVelocity(ivec3 p,int axis){ivec3 vd=dims;vd[axis]+=1;p=address(p,vd);return load_velocity(index3(p,dims+1))[axis];}
+float componentAt(vec3 x,int axis){
+#ifdef TEXTURE_TRANSPORT
+ if(periodic==0){ivec3 vd=dims;vd[axis]++;vec3 p=clamp(x-faceOffset(axis),vec3(0),vec3(vd-1));
+ return textureLod(velocityTexture,(p+.5)/vec3(dims+1),0.)[axis];}
+#endif
+ vec3 p=x-faceOffset(axis);ivec3 b=ivec3(floor(p));vec3 t=fract(p);float value=0.;
+ for(int k=0;k<2;k++)for(int j=0;j<2;j++)for(int i=0;i<2;i++){
+   ivec3 s=ivec3(i,j,k);vec3 w=mix(1.-t,t,vec3(s));value+=w.x*w.y*w.z*getVelocity(b+s,axis);
+ }return value;
+}
+vec3 velocityAt(vec3 x){return vec3(componentAt(x,0),componentAt(x,1),componentAt(x,2));}
+vec4 loadQ(ivec3 p,int pred){
+ ivec3 d=dims;if(velocityField==1)d+=1;
+ bool outside=any(lessThan(p,ivec3(0)))||any(greaterThanEqual(p,d));
+ if(velocityField==0&&outside&&periodic==0)return vec4(0);
+ p=address(p,d);int n=index3(p,d);return pred==0?load_original(n):load_predicted(n);
+}
+vec4 sampleQ(vec3 p,int pred){
+#ifdef TEXTURE_TRANSPORT
+ if(periodic==0){ivec3 d=dims;if(velocityField==1)d+=1;vec3 uv=(p+.5)/vec3(d);
+ return pred==0?textureLod(originalTexture,uv,0.):textureLod(predictedTexture,uv,0.);}
+#endif
+ ivec3 b=ivec3(floor(p));vec3 t=fract(p);vec4 v=vec4(0);
+ for(int k=0;k<2;k++)for(int j=0;j<2;j++)for(int i=0;i<2;i++){
+  ivec3 s=ivec3(i,j,k);vec3 w=mix(1.-t,t,vec3(s));v+=w.x*w.y*w.z*loadQ(b+s,pred);
+ }return v;
+}
+void boundsAt(vec3 p,out vec4 lo,out vec4 hi){
+ ivec3 b=ivec3(floor(p));lo=vec4(3.4e38);hi=-lo;
+ for(int k=0;k<2;k++)for(int j=0;j<2;j++)for(int i=0;i<2;i++){
+  vec4 q=loadQ(b+ivec3(i,j,k),0);lo=min(lo,q);hi=max(hi,q);
+ }
+}
+float sampleComponentQ(vec3 p,int pred,int axis,out float lo,out float hi){
+ ivec3 vd=dims;vd[axis]++;
+#ifdef TEXTURE_TRANSPORT
+ if(periodic==0&&(pred==1||correction==0)){
+  vec3 uv=(clamp(p,vec3(0),vec3(vd-1))+.5)/vec3(dims+1);lo=0.;hi=0.;
+  return pred==0?textureLod(originalTexture,uv,0.)[axis]:textureLod(predictedTexture,uv,0.)[axis];
+ }
+#endif
+ ivec3 b=ivec3(floor(p));vec3 t=fract(p);float val=0.;lo=3.4e38;hi=-lo;
+ for(int k=0;k<2;k++)for(int j=0;j<2;j++)for(int i=0;i<2;i++){
+  ivec3 shift=ivec3(i,j,k);ivec3 g=address(b+shift,vd);int n=index3(g,dims+1);
+  float q=pred==0?load_original(n)[axis]:load_predicted(n)[axis];vec3 w=mix(1.-t,t,vec3(shift));
+  val+=w.x*w.y*w.z*q;lo=min(lo,q);hi=max(hi,q);
+ }
+#ifdef TEXTURE_TRANSPORT
+ if(periodic==0){vec3 uv=(clamp(p,vec3(0),vec3(vd-1))+.5)/vec3(dims+1);
+ val=pred==0?textureLod(originalTexture,uv,0.)[axis]:textureLod(predictedTexture,uv,0.)[axis];}
+#endif
+ return val;
+}
+vec3 departure(vec3 p,float sign){
+ vec3 v=velocityAt(p);
+ float C=max(max(abs(v.x),abs(v.y)),abs(v.z))*abs(dt)/spacing;
+ int steps=clamp(int(ceil(C/max(traceCourant,.25))),1,max(maxTraceSteps,1));
+ float sub=sign*dt/(spacing*float(steps));
+ for(int k=0;k<steps;k++){
+  if(k>0)v=velocityAt(p);
+  vec3 next=p-sub*velocityAt(p-.5*sub*v);
+  p=solidCount>0?clipSolidSegment(p*spacing,next*spacing)/spacing:next;
+ }
+ return p;
+}
+void main(){
+ int n=invocationIndex();ivec3 d=dims;if(velocityField==1)d+=1;if(n>=cells(d))return;
+ ivec3 g=coord3(n,d);vec4 result=vec4(0);
+ if(velocityField==0){
+  vec3 x=vec3(g)+.5;vec3 dep=departure(x,1.);vec4 q=sampleQ(dep-.5,0);
+  if(correction==1){vec4 lo,hi;boundsAt(dep-.5,lo,hi);vec4 rev=sampleQ(departure(x,-1.)-.5,1);
+   q=clamp(load_predicted(n)+.5*(load_original(n)-rev),lo,hi);
+  }result=q;
+ }else{
+  for(int axis=0;axis<3;axis++){
+   ivec3 vd=dims;vd[axis]+=1;
+   if(all(lessThan(g,vd))){
+    vec3 off=faceOffset(axis),x=vec3(g)+off;vec3 dep=departure(x,1.);float lo,hi;
+    float q=sampleComponentQ(dep-off,0,axis,lo,hi);
+    if(correction==1){float a,b;float rev=sampleComponentQ(departure(x,-1.)-off,1,axis,a,b);
+      q=clamp(load_predicted(n)[axis]+.5*(load_original(n)[axis]-rev),lo,hi);
+    }result[axis]=q;
+   }
+  }
+ }store_outputField(n,result);
+#ifdef TEXTURE_TRANSPORT
+ #ifndef NATIVE_FIELDS
+ if(correction==0)imageStore(predictionImage,g,result);
+#endif
+#endif
+}

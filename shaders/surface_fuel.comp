@@ -1,0 +1,53 @@
+#version 430
+#include "common.glsl"
+// Surface field: R = available fuel kg/m^2, G = solid T Kelvin,
+// B = consumed/char kg/m^2, A = current pyrolysis kg/m^2/s.
+layout(std430,binding=0) readonly buffer OldSurface {vec4 oldSurface[];};
+layout(std430,binding=1) writeonly buffer NewSurface {vec4 nextSurface[];};
+#ifdef NATIVE_FIELDS
+layout(rgba32f,binding=10) readonly uniform image3D gas;
+vec4 readGas(ivec3 ijk){return imageLoad(gas,ijk);}
+#else
+layout(std430,binding=2) readonly buffer Gas {vec4 gasArray[];};
+vec4 readGas(ivec3 ijk){return gasArray[index3(ijk,dims)];}
+#endif
+uniform float ambientTemperature;
+uniform float initialInventory;
+uniform float ignitionTemperature;
+uniform float maximumBurnRate;
+uniform float surfaceHeatCapacity;
+uniform float diffusivity;
+uniform float heatTransfer;
+uniform float radiationSpread;
+uniform float coolingRate;
+uniform float capacity;
+float surfaceT(ivec2 coord){
+  coord=clamp(coord,ivec2(0),dims.xz-ivec2(1));
+  return oldSurface[coord.y*dims.x+coord.x].y;
+}
+float burnPotential(float T){return smoothstep(ignitionTemperature-60.,ignitionTemperature+90.,T);}
+void main(){
+ int n=invocationIndex();if(n>=dims.x*dims.z)return;
+ ivec2 ix=ivec2(n%dims.x,n/dims.x);
+ vec4 s=oldSurface[n];
+ if(s.x<=0. && s.z<=0.){nextSurface[n]=s;return;}
+ float T=max(ambientTemperature,s.y);
+ float gasT=ambientTemperature+max(0.,readGas(ivec3(ix.x,0,ix.y)).z)/capacity;
+ float h2=spacing*spacing;
+ float lap=(surfaceT(ix+ivec2(1,0))+surfaceT(ix+ivec2(-1,0))+surfaceT(ix+ivec2(0,1))+surfaceT(ix+ivec2(0,-1))-4.*T)/h2;
+ float neighborBurn=0.;
+ for(int j=-2;j<=2;j++)for(int i=-2;i<=2;i++){
+   ivec2 ij=clamp(ix+ivec2(i,j),ivec2(0),dims.xz-ivec2(1));
+   vec4 nb=oldSurface[ij.y*dims.x+ij.x];
+   float r2=float(i*i+j*j);
+   neighborBurn+=burnPotential(nb.y)*min(nb.x/.1,1.)*exp(-.5*r2);
+ }
+ float convection=heatTransfer*(gasT-T)/surfaceHeatCapacity;
+ float radiation=radiationSpread*neighborBurn*(gasT>ambientTemperature?1.:.5);
+ float newT=clamp(T+dt*(diffusivity*lap+convection+radiation-coolingRate*(T-ambientTemperature)),ambientTemperature,2400.);
+ float available=max(0.,s.x);
+ float fuelFraction=clamp(available/max(initialInventory,1.e-6),0.,1.);
+ float burnRate=maximumBurnRate*fuelFraction*burnPotential(newT);
+ float burned=min(available,dt*burnRate);
+ nextSurface[n]=vec4(available-burned,newT,s.z+burned,burned/max(dt,1.e-6));
+}

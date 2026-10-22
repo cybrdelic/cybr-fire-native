@@ -1,0 +1,101 @@
+#version 430
+#include "common.glsl"
+#include "solids.glsl"
+#include "volume_sampling.glsl"
+layout(std430,binding=0) writeonly buffer H {vec4 hdr[];};
+layout(std430,binding=2) writeonly buffer M {vec4 rayMetrics[];};
+layout(binding=0) uniform sampler3D opticalTexture;
+layout(binding=1) uniform sampler3D lightingTexture;
+layout(binding=5) uniform sampler3D groundTexture;
+uniform vec3 patchOrigin;
+uniform vec3 patchExtent;
+uniform ivec2 resolution;
+uniform ivec2 outputOrigin;
+uniform ivec2 outputResolution;
+uniform vec3 cameraPosition;
+uniform vec3 cameraForward;
+uniform vec3 cameraRight;
+uniform vec3 cameraUp;
+uniform float tanHalfFov;
+uniform float stepScale;
+uniform float scatterAlbedo;
+uniform int sampleSeed;
+uniform int stableSampling;
+uniform int samples;
+uniform vec3 background;
+uniform int floorEnabled;
+#include "reconstruction.glsl"
+#include "surface.glsl"
+#include "particle_events.glsl"
+vec3 trace(vec3 ro,vec3 rd,uint seed,inout vec3 metrics,vec2 pixel){
+ vec3 size=vec3(dims)*spacing;vec2 hit=volumeBoxHit(ro,rd,size);
+ float floorT=1.e10;vec3 bg=background;
+ if(floorEnabled==1&&rd.y<-.00001){
+  floorT=-ro.y/rd.y;vec3 p=ro+floorT*rd;
+  vec3 uv=(p-patchOrigin)/patchExtent;uv.y=.5;
+  int shadowObject;float vis=firstSolidHit(p+vec3(0.,.001,0.),normalize(keyDirection),shadowObject)<1.e19?0.:1.;
+  float gasShadow=textureLod(directTexture,p/size,0.).r;
+  bg=vec3(.018,.021,.026)+.19*textureLod(groundTexture,uv,0.).rgb+.10*keyColor*keyIntensity*max(normalize(keyDirection).y,0.)*vis*gasShadow;
+ }
+ int solidObject;float solidT=firstSolidHit(ro,rd,solidObject);
+ if(solidT<floorT){vec3 p=ro+solidT*rd;bg=surfaceRadiance(p,solidNormal(p,solidObject),-rd,solidObject);}
+ float lastT=min(floorT,solidT),entry=max(hit.x,0.),end=min(hit.y,lastT);
+ vec3 light=vec3(0);float Tr=1.,ds=spacing*stepScale;
+#ifdef PARTICLE_EVENTS
+ int eventCount,eventIndex=0;float eventDepth[MAX_PARTICLE_EVENTS];vec4 eventValue[MAX_PARTICLE_EVENTS];
+ gatherParticles(pixel,rd,lastT,eventCount,eventDepth,eventValue);
+ while(eventIndex<eventCount&&eventDepth[eventIndex]<entry){depositParticle(eventValue[eventIndex],light,Tr);eventIndex++;}
+#endif
+ if(end>entry){
+  int count=int(ceil((end-entry)/ds));float fraction=.15+.7*rand01(seed);
+  metrics.z+=float(count);
+  int spanEnd=0;
+  for(int k=0;k<count;){
+   if(Tr<transmittanceCutoff)break;
+   float t=entry+float(k)*ds,len=min(ds,end-t),sampleT=t+len*fraction;
+   vec3 p=ro+rd*sampleT;
+   if(k>=spanEnd){
+    int next=skipEmptySamples(p,rd,entry,sampleT,ds,fraction,k,count,spanEnd);
+    if(next!=k){
+#ifdef PARTICLE_EVENTS
+     float nextT=entry+float(next)*ds;
+     while(eventIndex<eventCount&&eventDepth[eventIndex]<nextT){depositParticle(eventValue[eventIndex],light,Tr);eventIndex++;}
+#endif
+     metrics.y+=float(next-k);k=next;continue;}
+   }
+   vec3 uv=p/size;vec4 o=mediumSample(uv);
+   float tau=o.a*len,a=segmentAlpha(tau),integral=segmentIntegral(tau,len,o.a);
+   vec3 Li=textureLod(lightingTexture,uv,0.).rgb+directScattering(uv,rd);
+#ifdef PARTICLE_EVENTS
+   float cursor=t;
+   while(eventIndex<eventCount&&eventDepth[eventIndex]<=t+len){
+    float piece=max(eventDepth[eventIndex]-cursor,0.),ptau=o.a*piece,pa=segmentAlpha(ptau);
+    light+=Tr*(o.rgb*segmentIntegral(ptau,piece,o.a)+scatterAlbedo*Li*pa);Tr*=1.-pa;
+    depositParticle(eventValue[eventIndex],light,Tr);cursor=eventDepth[eventIndex];eventIndex++;
+   }
+   float piece=max(t+len-cursor,0.);tau=o.a*piece;a=segmentAlpha(tau);integral=segmentIntegral(tau,piece,o.a);
+#endif
+   light+=Tr*(o.rgb*integral+scatterAlbedo*Li*a);Tr*=1.-a;
+   metrics.x+=1.;k++;
+  }
+ }
+#ifdef PARTICLE_EVENTS
+ while(eventIndex<eventCount){depositParticle(eventValue[eventIndex],light,Tr);eventIndex++;}
+#endif
+ return light+Tr*bg;
+}
+void main(){
+ int n=invocationIndex();if(n>=outputResolution.x*outputResolution.y)return;
+ ivec2 pix=ivec2(n%outputResolution.x,n/outputResolution.x)+outputOrigin;
+ int globalIndex=pix.x+pix.y*resolution.x;vec3 color=vec3(0),metrics=vec3(0);
+ for(int s=0;s<samples;s++){
+  // A stable sample sequence removes frame-index noise without temporal
+  // filtering, previous-frame histories, ghosting, or changing the simulation.
+  uint seed=uint(globalIndex*173+s*7937+(stableSampling==1?0:sampleSeed*1741));
+  vec2 jitter=vec2(rand01(seed),rand01(seed+137u))-.5;
+  vec2 uv=(vec2(pix)+.5+jitter)/vec2(resolution)*2.-1.;uv.y=-uv.y;uv.x*=float(resolution.x)/float(resolution.y);
+  vec3 rd=normalize(cameraForward+tanHalfFov*(uv.x*cameraRight+uv.y*cameraUp));
+  color+=trace(cameraPosition,rd,seed,metrics,vec2(pix)+.5+jitter);
+ }
+ hdr[n]=vec4(color/float(samples),1.);rayMetrics[n]=vec4(metrics,float(samples));
+}

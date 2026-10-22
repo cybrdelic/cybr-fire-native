@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+cache/
+captures/
+production/
+outputs/
+input/
+*.npy
+*.npz
+*.partial.mp4

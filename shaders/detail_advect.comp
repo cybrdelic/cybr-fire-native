@@ -1,0 +1,44 @@
+#version 430
+#include "common.glsl"
+layout(binding=0) uniform sampler3D inputState;
+layout(binding=1) uniform sampler3D flowTexture;
+layout(rgba32f,binding=0) writeonly uniform image3D outputState;
+uniform vec3 extent;
+uniform int cubic;
+uniform float traceBudget;
+uniform int traceLimit;
+vec4 valueAt(ivec3 p){if(any(lessThan(p,ivec3(0)))||any(greaterThanEqual(p,dims)))return vec4(0.);return texelFetch(inputState,p,0);}
+vec4 slope(vec4 a,vec4 b){vec4 s=.5*(a+b);return sign(s)*min(abs(s),2.*min(abs(a),abs(b)))*vec4(greaterThan(a*b,vec4(0.)));}
+vec4 interp(vec4 a,vec4 b,vec4 c,vec4 d,float t){
+ float u=t*t,v=u*t;
+ return clamp((2.*v-3.*u+1.)*b+(v-2.*u+t)*slope(b-a,c-b)+(-2.*v+3.*u)*c+(v-u)*slope(c-b,d-c),min(b,c),max(b,c));
+}
+vec4 sampleState(vec3 p){
+ vec3 uv=p/extent;vec4 linear=textureLod(inputState,uv,0.);
+ // If all contributing values are zero, a locally bounded interpolant is zero.
+ if(cubic==0||all(equal(linear,vec4(0.))))return linear;
+ vec3 x=uv*vec3(dims)-.5;ivec3 b=ivec3(floor(x));vec3 f=fract(x);vec4 zz[4];
+ for(int k=0;k<4;k++){
+  vec4 yy[4];
+  for(int j=0;j<4;j++){
+   ivec3 c=b+ivec3(-1,j-1,k-1);
+   yy[j]=interp(valueAt(c),valueAt(c+ivec3(1,0,0)),valueAt(c+ivec3(2,0,0)),valueAt(c+ivec3(3,0,0)),f.x);
+  }
+  zz[k]=interp(yy[0],yy[1],yy[2],yy[3],f.y);
+ }
+ return interp(zz[0],zz[1],zz[2],zz[3],f.z);
+}
+vec3 flow(vec3 p){
+ vec3 v=textureLod(flowTexture,clamp(p/extent,vec3(0),vec3(1)),0.).xyz;
+ // The cell-centered cache reconstructs an explicitly closed normal floor face.
+ float firstCenter=.5*extent.y/float(textureSize(flowTexture,0).y);
+ v.y*=clamp(p.y/firstCenter,0.,1.);return v;
+}
+void main(){
+ int n=invocationIndex();if(n>=cells(dims))return;ivec3 g=coord3(n,dims);
+ vec3 p=(vec3(g)+.5)*spacing,v=flow(p);
+ float C=max(max(abs(v.x),abs(v.y)),abs(v.z))*dt/spacing;
+ int steps=clamp(int(ceil(C/traceBudget)),1,traceLimit);float h=dt/float(steps);
+ for(int k=0;k<steps;k++){v=flow(p);p-=h*flow(p-.5*h*v);}
+ imageStore(outputState,g,sampleState(p));
+}

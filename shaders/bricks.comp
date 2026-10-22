@@ -1,0 +1,19 @@
+#version 430
+#include "common.glsl"
+layout(binding=0) uniform sampler3D opticalTexture;
+layout(std430,binding=0) writeonly buffer B {float bounds[];};
+uniform ivec3 brickDims;
+uniform int brickSize;
+void main(){
+ int n=invocationIndex();if(n>=cells(brickDims))return;
+ ivec3 origin=coord3(n,brickDims)*brickSize;
+ float maximum=0.;
+ // A sample in this physical brick can interpolate either neighboring voxel.
+ // The one-texel halo on EACH side includes the full trilinear footprint.
+ for(int k=-1;k<=brickSize;k++)for(int j=-1;j<=brickSize;j++)for(int i=-1;i<=brickSize;i++){
+  ivec3 q=clamp(origin+ivec3(i,j,k),ivec3(0),dims-1);
+  vec4 o=texelFetch(opticalTexture,q,0);
+  maximum=max(maximum,max(o.a,max(o.r,max(o.g,o.b))));
+ }
+ bounds[n]=maximum;
+}

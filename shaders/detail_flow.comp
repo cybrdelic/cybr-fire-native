@@ -1,0 +1,42 @@
+#version 430
+#include "common.glsl"
+// Prescribed, cached MAC flow plus an explicitly modeled transverse spectrum.
+// Each Fourier mode has k dot polarization == 0. This is not a fine pressure solve.
+layout(binding=4) uniform sampler3D parentBefore;
+layout(binding=5) uniform sampler3D parentAfter;
+layout(std430,binding=0) readonly buffer Modes {vec4 modes[];};
+#ifdef FLOW_FP16
+layout(rgba16f,binding=0) writeonly uniform image3D fineFlow;
+#else
+layout(rgba32f,binding=0) writeonly uniform image3D fineFlow;
+#endif
+uniform ivec3 parentDims;
+uniform vec3 extent;
+uniform float blend;
+uniform float time;
+uniform int modeCount;
+uniform float detailStrength;
+uniform float floorLayer;
+float component(sampler3D volume,vec3 p,int axis){
+ vec3 x=p/extent*vec3(parentDims)-faceOffset(axis);
+ ivec3 d=parentDims;d[axis]++;
+ return textureLod(volume,(clamp(x,vec3(0),vec3(d-1))+.5)/vec3(parentDims+1),0.)[axis];
+}
+void main(){
+ int n=invocationIndex();if(n>=cells(dims))return;
+ ivec3 g=coord3(n,dims);vec3 p=(vec3(g)+.5)/vec3(dims)*extent;
+ vec3 v;
+ for(int axis=0;axis<3;axis++)v[axis]=mix(component(parentBefore,p,axis),component(parentAfter,p,axis),blend);
+ vec3 small=vec3(0.);
+ float u=clamp(p.y/floorLayer,0.,1.),window=u*u*(3.-2.*u);
+ float derivative=(p.y>0.&&p.y<floorLayer)?6.*u*(1.-u)/floorLayer:0.;
+ for(int m=0;m<modeCount;m++){
+  vec3 k=modes[2*m].xyz,pol=modes[2*m+1].xyz;
+  float phase=dot(k,p)+modes[2*m].w-time*modes[2*m+1].w;
+  // Curl(window*A), not window*curl(A): the gradient term is essential.
+  vec3 potential=cross(k,pol)/dot(k,k)*cos(phase);
+  small+=window*pol*sin(phase)+cross(vec3(0.,derivative,0.),potential);
+ }
+ v+=detailStrength*small;
+ imageStore(fineFlow,g,vec4(v,0.));
+}

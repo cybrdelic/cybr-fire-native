@@ -1,0 +1,5 @@
+#version 430
+#include "common.glsl"
+layout(std430,binding=0) readonly buffer Q {vec4 data[];};
+layout(rgba32f,binding=2) writeonly uniform image3D cacheImage;
+void main(){int n=invocationIndex();if(n>=cells(dims))return;imageStore(cacheImage,coord3(n,dims),data[n]);}
